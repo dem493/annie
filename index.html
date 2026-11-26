@@ -704,6 +704,32 @@ function encodePcmToWavBlob(float32, sampleRate = 24000) {
   return new Blob([buf], { type: "audio/wav" });
 }
 
+const IS_MOBILE_DEVICE = typeof navigator !== "undefined" && (
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || "") ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+);
+const KOKORO_DTYPE = IS_MOBILE_DEVICE ? "q4" : "q8";
+const KOKORO_DISK_CACHE_NAME = "annie-kokoro-audio-v1";
+
+// Split longer lines on sentence boundaries so the FIRST sentence starts playing in <1s while sentence 2 generates!
+function splitKokoroChunks(text) {
+  if (!text || text.length <= 85) return [text];
+  const sentences = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+  const chunks = [];
+  let buf = "";
+  for (const s of sentences) {
+    const limit = chunks.length === 0 ? 85 : 135;
+    if (buf && (buf.length + s.length) > limit) {
+      chunks.push(buf.trim());
+      buf = s;
+    } else {
+      buf += s;
+    }
+  }
+  if (buf.trim()) chunks.push(buf.trim());
+  return chunks.length ? chunks : [text];
+}
+
 const KOKORO_WORKER_CODE = `
 let tts = null;
 async function loadKokoro() {
@@ -723,15 +749,30 @@ async function loadKokoro() {
 self.onmessage = async (ev) => {
   const msg = ev.data || {};
   if (msg.type === "init") {
+    const wantDtype = msg.dtype || "q8";
     try {
       const KokoroTTS = await loadKokoro();
-      tts = await KokoroTTS.from_pretrained("${KOKORO_MODEL_ID}", {
-        dtype: "q8",
-        device: "wasm",
-        progress_callback: (p) => {
-          self.postMessage({ type: "progress", progress: p });
+      try {
+        tts = await KokoroTTS.from_pretrained("${KOKORO_MODEL_ID}", {
+          dtype: wantDtype,
+          device: "wasm",
+          progress_callback: (p) => {
+            self.postMessage({ type: "progress", progress: p });
+          }
+        });
+      } catch (e1) {
+        if (wantDtype !== "q8") {
+          tts = await KokoroTTS.from_pretrained("${KOKORO_MODEL_ID}", {
+            dtype: "q8",
+            device: "wasm",
+            progress_callback: (p) => {
+              self.postMessage({ type: "progress", progress: p });
+            }
+          });
+        } else {
+          throw e1;
         }
-      });
+      }
       self.postMessage({ type: "ready" });
     } catch (err) {
       self.postMessage({ type: "error", message: String(err && err.message ? err.message : err) });
@@ -766,12 +807,50 @@ let kokoroWorker = null;
 let kokoroMainTts = null;
 let kokoroUseMainThread = false;
 let kokoroReqSeq = 0;
-const kokoroPending = new Map();       // reqId -> { resolve, reject }
-const kokoroAudioCache = new Map();    // cacheKey -> blobUrl
+const kokoroPending = new Map();       // reqId -> { resolve }
+const kokoroAudioCache = new Map();    // cacheKey -> blobUrl (RAM)
 const kokoroInFlight = new Map();      // cacheKey -> Promise<blobUrl | null>
-const kokoroQueue = [];                // { cacheKey, text, voice, speed, resolve }
+const kokoroQueue = [];                // { cacheKey, text, voice, speed, urgent, resolve }
 let kokoroBusy = false;
 const kokoroFileBytes = new Map();
+
+function diskCacheReqUrl(cacheKey) {
+  return `https://kokoro.local/clip/${encodeURIComponent(cacheKey)}`;
+}
+
+async function readKokoroDiskCache(cacheKey) {
+  if (typeof caches === "undefined") return null;
+  try {
+    const cache = await caches.open(KOKORO_DISK_CACHE_NAME);
+    const resp = await cache.match(diskCacheReqUrl(cacheKey));
+    if (!resp) return null;
+    const blob = await resp.blob();
+    if (!blob || blob.size < 44) return null;
+    const url = URL.createObjectURL(blob);
+    kokoroAudioCache.set(cacheKey, url);
+    return url;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function writeKokoroDiskCache(cacheKey, blob) {
+  if (typeof caches === "undefined" || !blob || typeof Response === "undefined") return;
+  try {
+    const cache = await caches.open(KOKORO_DISK_CACHE_NAME);
+    await cache.put(diskCacheReqUrl(cacheKey), new Response(blob, { headers: { "Content-Type": "audio/wav" } }));
+  } catch (e) {}
+}
+
+function pruneBackgroundKokoroQueue() {
+  for (let i = kokoroQueue.length - 1; i >= 0; i--) {
+    if (!kokoroQueue[i].urgent) {
+      const removed = kokoroQueue.splice(i, 1)[0];
+      kokoroInFlight.delete(removed.cacheKey);
+      removed.resolve(null);
+    }
+  }
+}
 
 function handleKokoroProgress(p) {
   if (!p) return;
@@ -779,7 +858,6 @@ function handleKokoroProgress(p) {
     kokoroFileBytes.set(p.file, { loaded: p.loaded, total: p.total });
     let loaded = 0, total = 0;
     for (const [fname, info] of kokoroFileBytes.entries()) {
-      // Weight the main ONNX model heavily so tiny JSON files don't flash 100% early
       if (fname.endsWith(".onnx") || info.total > 1000000) {
         loaded += info.loaded;
         total += info.total;
@@ -816,17 +894,25 @@ async function initKokoroMainThread() {
       } catch (e) {}
     }
     if (!KokoroTTS) throw new Error("Could not load Kokoro voice module");
-    kokoroMainTts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
-      dtype: "q8",
-      device: "wasm",
-      progress_callback: handleKokoroProgress
-    });
+    try {
+      kokoroMainTts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
+        dtype: KOKORO_DTYPE,
+        device: "wasm",
+        progress_callback: handleKokoroProgress
+      });
+    } catch (e1) {
+      kokoroMainTts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
+        dtype: "q8",
+        device: "wasm",
+        progress_callback: handleKokoroProgress
+      });
+    }
     state.kokoroStatus = "ready";
     state.kokoroProgress = 100;
     state.kokoroError = "";
     renderKokoroBadge();
     renderControls();
-    prefetchUpcomingKokoroCues(state.currentIndex);
+    prefetchUpcomingKokoroCues(state.currentIndex, true);
   } catch (err) {
     state.kokoroStatus = "error";
     state.kokoroError = String(err && err.message ? err.message : "Could not load neural voices");
@@ -844,7 +930,6 @@ function initKokoroEngine() {
   kokoroFileBytes.clear();
   renderKokoroBadge();
 
-  // Prefer background Web Worker (smooth UI + mic meter); seamlessly fall back to main thread if blocked (e.g. file://)
   if (typeof Worker !== "undefined") {
     let sawWorkerLife = false;
     try {
@@ -864,7 +949,7 @@ function initKokoroEngine() {
           state.kokoroError = "";
           renderKokoroBadge();
           renderControls();
-          prefetchUpcomingKokoroCues(state.currentIndex);
+          prefetchUpcomingKokoroCues(state.currentIndex, true);
         } else if (msg.type === "error") {
           try { w.terminate(); } catch (e) {}
           kokoroWorker = null;
@@ -874,7 +959,7 @@ function initKokoroEngine() {
           if (pend) {
             kokoroPending.delete(msg.id);
             const blob = msg.type === "audio" ? msg.blob : encodePcmToWavBlob(msg.pcm, msg.sampleRate || 24000);
-            pend.resolve(URL.createObjectURL(blob));
+            pend.resolve(blob);
           }
         } else if (msg.type === "audio_error") {
           const pend = kokoroPending.get(msg.id);
@@ -893,7 +978,7 @@ function initKokoroEngine() {
         }
       };
 
-      w.postMessage({ type: "init" });
+      w.postMessage({ type: "init", dtype: KOKORO_DTYPE });
       return;
     } catch (e) {
       kokoroWorker = null;
@@ -902,7 +987,7 @@ function initKokoroEngine() {
   initKokoroMainThread();
 }
 
-async function synthesizeKokoroOnce(text, voice, speed) {
+async function synthesizeKokoroBlob(text, voice, speed) {
   if (state.kokoroStatus !== "ready") return null;
   if (kokoroWorker && !kokoroUseMainThread) {
     return new Promise((resolve) => {
@@ -914,7 +999,7 @@ async function synthesizeKokoroOnce(text, voice, speed) {
         }
       }, 25000);
       kokoroPending.set(id, {
-        resolve: (url) => { clearTimeout(timeout); resolve(url); }
+        resolve: (blob) => { clearTimeout(timeout); resolve(blob); }
       });
       kokoroWorker.postMessage({ type: "speak", id, text, voice, speed });
     });
@@ -922,10 +1007,9 @@ async function synthesizeKokoroOnce(text, voice, speed) {
   if (kokoroMainTts) {
     try {
       const audio = await kokoroMainTts.generate(text, { voice: voice || "af_heart", speed: speed || 1.0 });
-      const blob = (audio && typeof audio.toBlob === "function")
+      return (audio && typeof audio.toBlob === "function")
         ? audio.toBlob()
         : (audio && audio.audio ? encodePcmToWavBlob(audio.audio, audio.sampling_rate || 24000) : null);
-      return blob ? URL.createObjectURL(blob) : null;
     } catch (e) {
       return null;
     }
@@ -939,11 +1023,24 @@ async function drainKokoroQueue() {
   while (kokoroQueue.length > 0) {
     const job = kokoroQueue.shift();
     if (kokoroAudioCache.has(job.cacheKey)) {
+      kokoroInFlight.delete(job.cacheKey);
       job.resolve(kokoroAudioCache.get(job.cacheKey));
       continue;
     }
-    const url = await synthesizeKokoroOnce(job.text, job.voice, job.speed);
-    if (url) kokoroAudioCache.set(job.cacheKey, url);
+    // Check persistent Cache Storage first (0ms replay on repeat scenes across sessions!)
+    const diskUrl = await readKokoroDiskCache(job.cacheKey);
+    if (diskUrl) {
+      kokoroInFlight.delete(job.cacheKey);
+      job.resolve(diskUrl);
+      continue;
+    }
+    const blob = await synthesizeKokoroBlob(job.text, job.voice, job.speed);
+    let url = null;
+    if (blob) {
+      url = URL.createObjectURL(blob);
+      kokoroAudioCache.set(job.cacheKey, url);
+      writeKokoroDiskCache(job.cacheKey, blob); // Persist for instant future rehearsals!
+    }
     kokoroInFlight.delete(job.cacheKey);
     job.resolve(url);
   }
@@ -955,10 +1052,21 @@ function requestKokoroChunkUrl(chunkText, speakerRaw, urgent = false) {
   const cfg = getKokoroConfig(speakerRaw);
   const cacheKey = `${cfg.voice}:${cfg.speed}:${chunkText}`;
   if (kokoroAudioCache.has(cacheKey)) return Promise.resolve(kokoroAudioCache.get(cacheKey));
-  if (kokoroInFlight.has(cacheKey)) return kokoroInFlight.get(cacheKey);
+  if (kokoroInFlight.has(cacheKey)) {
+    // Promote an already-queued background job to the front if it just became urgent!
+    if (urgent) {
+      const qIdx = kokoroQueue.findIndex(j => j.cacheKey === cacheKey);
+      if (qIdx > 0) {
+        const [job] = kokoroQueue.splice(qIdx, 1);
+        job.urgent = true;
+        kokoroQueue.unshift(job);
+      }
+    }
+    return kokoroInFlight.get(cacheKey);
+  }
 
   const p = new Promise((resolve) => {
-    const job = { cacheKey, text: chunkText, voice: cfg.voice, speed: cfg.speed, resolve };
+    const job = { cacheKey, text: chunkText, voice: cfg.voice, speed: cfg.speed, urgent, resolve };
     if (urgent) kokoroQueue.unshift(job);
     else kokoroQueue.push(job);
     drainKokoroQueue();
@@ -967,11 +1075,14 @@ function requestKokoroChunkUrl(chunkText, speakerRaw, urgent = false) {
   return p;
 }
 
-function prefetchUpcomingKokoroCues(fromIdx) {
+function prefetchUpcomingKokoroCues(fromIdx, includeCurrent = false) {
   if (state.kokoroStatus !== "ready" || state.openaiKey || !state.script) return;
-  let cursor = fromIdx;
+  if (includeCurrent) pruneBackgroundKokoroQueue();
+
+  let cursor = includeCurrent ? fromIdx - 1 : fromIdx;
   let queued = 0;
-  for (let step = 0; step < 4 && queued < 2; step++) {
+  // Pre-warm the next 5 upcoming character lines in the background while rehearsing!
+  for (let step = 0; step < 10 && queued < 5; step++) {
     const nxt = findNextPlayable(cursor, 1);
     if (nxt === null) break;
     cursor = nxt;
@@ -979,7 +1090,7 @@ function prefetchUpcomingKokoroCues(fromIdx) {
     if (!it || isMyLine(it) || it.songBlock) continue;
     const spoken = prepareTextForNaturalSpeech(it.text);
     if (!spoken) continue;
-    const chunks = splitSpeechChunks(spoken);
+    const chunks = splitKokoroChunks(spoken);
     chunks.forEach(ch => requestKokoroChunkUrl(ch, it.speaker, false));
     queued++;
   }
@@ -1171,6 +1282,7 @@ function evaluatePronunciation(targetText, spokenText, confidences = []) {
       matched: sws.length ? 1 : 0,
       total: 0,
       tailMatched: sws.length >= 1,
+      lastWordMatched: sws.length >= 1,
       avgConfidence,
       lowConfidence: false,
       missedWords: []
@@ -1207,6 +1319,7 @@ function evaluatePronunciation(targetText, spokenText, confidences = []) {
   for (let k = Math.max(0, tws.length - tailWindow); k < tws.length; k++) {
     if (matchedTarget[k]) { tailMatched = true; break; }
   }
+  const lastWordMatched = Boolean(matchedTarget[tws.length - 1]);
   const spokenEnough = sws.length >= Math.max(1, Math.floor(tws.length * 0.72));
 
   const wordsOk = ratio >= minRatio && tailMatched && spokenEnough;
@@ -1220,6 +1333,7 @@ function evaluatePronunciation(targetText, spokenText, confidences = []) {
     matched,
     total: tws.length,
     tailMatched,
+    lastWordMatched,
     avgConfidence,
     lowConfidence,
     missedWords
@@ -1705,8 +1819,12 @@ function playAudioUrlUnlocked(url, myRun, onDone, onFail) {
 function judgeHerAttempt(cur, spokenText, confidences, deferCount = 0) {
   if (!micGateOpen || turnTriggerLock || !state.isRunning) return;
 
-  // NEVER cut off while vocal sound is still being detected on the mic! (snappy 380ms silence window)
-  if (audioAnalyser && lastVoicedAt > 0 && (Date.now() - lastVoicedAt) < 380 && deferCount < 6) {
+  const finalSpoken = latestAttemptText || spokenText;
+  const finalConf = latestAttemptConfidences.length ? latestAttemptConfidences : confidences;
+  const quickPron = evaluatePronunciation(cur.text, finalSpoken, finalConf);
+
+  // Only defer if she hasn't finished the exact last word yet AND vocal sound is still active (< 240ms)
+  if (!quickPron.lastWordMatched && audioAnalyser && lastVoicedAt > 0 && (Date.now() - lastVoicedAt) < 240 && deferCount < 5) {
     if (silenceTimer) clearTimeout(silenceTimer);
     silenceTimer = setTimeout(() => {
       judgeHerAttempt(
@@ -1715,12 +1833,10 @@ function judgeHerAttempt(cur, spokenText, confidences, deferCount = 0) {
         latestAttemptConfidences.length ? latestAttemptConfidences : confidences,
         deferCount + 1
       );
-    }, 220);
+    }, 150);
     return;
   }
 
-  const finalSpoken = latestAttemptText || spokenText;
-  const finalConf = latestAttemptConfidences.length ? latestAttemptConfidences : confidences;
   const acousticStats = audioAnalyser
     ? summarizeAcoustics(attemptRmsSamples, attemptPitchSemitones, ambientRms)
     : { available: false };
@@ -1755,9 +1871,10 @@ async function ensurePersistentMic() {
     return;
   }
 
-  // On Desktop & Android: acquire one persistent audio stream for Projection & Expression coaching.
-  // On iPhone/iPad (iOS Safari): skip getUserMedia so iOS never locks audio into quiet earpiece mode or conflicts with SpeechRecognition!
-  if (!IS_IOS && !persistentMediaStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  // On Desktop: acquire one persistent audio stream for Projection & Expression coaching.
+  // On Mobile (iPhone & Android): skip getUserMedia so it NEVER conflicts with SpeechRecognition
+  // (prevents rapid Android beeping loop + slow transcription + iOS quiet earpiece mode!).
+  if (!IS_MOBILE_DEVICE && !persistentMediaStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     try {
       persistentMediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1775,7 +1892,7 @@ async function ensurePersistentMic() {
     }
   }
 
-  if (persistentMediaStream && !IS_IOS) {
+  if (persistentMediaStream && !IS_MOBILE_DEVICE) {
     ensureAudioAnalyser(persistentMediaStream);
     resumeAudioContext();
     if (micGateOpen && !acousticTimer) {
@@ -1786,7 +1903,7 @@ async function ensurePersistentMic() {
   if (!persistentRec) {
     const rec = new Ctor();
     rec.lang = "en-US";
-    rec.continuous = !IS_IOS;
+    rec.continuous = !IS_MOBILE_DEVICE;
     rec.interimResults = true;
     rec.maxAlternatives = 3;
 
@@ -1856,11 +1973,12 @@ async function ensurePersistentMic() {
 
       const spokenWords = normWords(combined).length;
       if (spokenWords >= 1) {
-        // Snappy response once the ending of the line is spoken; patient 1.45s mid-line so breaths never cut you off!
-        const waitMs = (pron.ok && pron.tailMatched && allFinal)
-          ? 350
-          : (pron.ok && pron.tailMatched ? 520
-            : (pron.tailMatched && pron.ratio >= 0.70 ? 700 : 1450));
+        // Lightning-fast check once the exact final word is heard (60ms final / 180ms interim),
+        // while keeping 1.05s patience mid-sentence so pauses/breaths never cut you off!
+        const waitMs = (pron.ok && pron.lastWordMatched)
+          ? (allFinal ? 60 : 180)
+          : (pron.ok && pron.tailMatched ? 340
+            : (pron.tailMatched && pron.ratio >= 0.70 ? 500 : 1050));
         silenceTimer = setTimeout(() => {
           judgeHerAttempt(cur, combined, confidences, 0);
         }, waitMs);
@@ -1881,15 +1999,16 @@ async function ensurePersistentMic() {
 
     rec.onend = () => {
       recIsRunning = false;
-      // On iOS Safari, ONLY restart recognition while actively waiting on her line (so iOS never mutes other characters!)
-      const shouldKeepRunning = state.isRunning && !state.micError && (!IS_IOS || micGateOpen);
+      // On Mobile (iOS & Android): NEVER restart SpeechRecognition while other characters speak (prevents beeping between lines!).
+      const shouldKeepRunning = state.isRunning && !state.micError && (!IS_MOBILE_DEVICE || micGateOpen);
       if (shouldKeepRunning) {
+        const restartDelay = IS_MOBILE_DEVICE ? 400 : 150;
         setTimeout(() => {
-          const stillNeed = state.isRunning && !recIsRunning && persistentRec && (!IS_IOS || micGateOpen);
+          const stillNeed = state.isRunning && !recIsRunning && persistentRec && (!IS_MOBILE_DEVICE || micGateOpen);
           if (stillNeed) {
             try { persistentRec.start(); } catch (e) {}
           }
-        }, 150);
+        }, restartDelay);
       } else {
         state.micActive = false;
       }
@@ -1898,8 +2017,8 @@ async function ensurePersistentMic() {
     persistentRec = rec;
   }
 
-  // On iOS, only start SpeechRecognition when the mic gate is actually open for her line
-  if (!recIsRunning && (!IS_IOS || micGateOpen)) {
+  // On Mobile (iOS & Android), ONLY start SpeechRecognition when the mic gate is actually open for your line
+  if (!recIsRunning && (!IS_MOBILE_DEVICE || micGateOpen)) {
     try {
       persistentRec.start();
     } catch (e) {
@@ -1913,9 +2032,10 @@ function closeMicGate() {
   stopAcousticSampling();
   if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
   if (gateDelayTimer) { clearTimeout(gateDelayTimer); gateDelayTimer = null; }
-  // CRITICAL iOS Safari fix: stop SpeechRecognition when other characters speak so iOS restores full speaker audio!
-  if (IS_IOS && persistentRec && recIsRunning) {
-    try { persistentRec.stop(); } catch (e) {}
+  // On Mobile (iOS & Android): use silent abort() instead of stop() so OS closes mic WITHOUT playing the closing beep
+  // and immediately restores full loudspeaker volume for other characters!
+  if (IS_MOBILE_DEVICE && persistentRec && recIsRunning) {
+    try { persistentRec.abort(); } catch (e) {}
   }
 }
 
@@ -1928,7 +2048,7 @@ function openMicGateForMyLine() {
   state.coachFeedback = null;
   state.justMatched = false;
 
-  // Brief 150ms echo guard before listening
+  // Snappy 60ms echo guard before listening
   gateDelayTimer = setTimeout(() => {
     if (!state.isRunning || !state.waitingForMe) return;
     micGateOpen = true;
@@ -1936,7 +2056,7 @@ function openMicGateForMyLine() {
     ensurePersistentMic();
     startAcousticSampling();
     updateLiveMicDom();
-  }, 150);
+  }, 60);
 }
 
 function completeHerTurn() {
@@ -1961,7 +2081,7 @@ function completeHerTurn() {
     } else {
       pauseRehearsal();
     }
-  }, 360);
+  }, 180);
 }
 
 // ============================================================================
@@ -1998,8 +2118,8 @@ function startRehearsal() {
   state.isRunning = true;
   state.micError = "";
   unlockAudioForMobile(); // Synchronously unlock iOS Safari AudioContext + <audio> on tap!
-  if (!IS_IOS) {
-    ensurePersistentMic(); // On Desktop/Android, activate persistent mic ONCE right on user click!
+  if (!IS_MOBILE_DEVICE) {
+    ensurePersistentMic(); // On Desktop, activate persistent mic ONCE right on user click!
   }
 
   const cur = state.script.items[state.currentIndex];
@@ -2220,9 +2340,9 @@ function runLoop() {
     return;
   }
 
-  // Priority 2: Free In-Browser Kokoro-82M Neural AI Voices (plays via unlocked Web Audio on iOS/Android/Desktop!)
+  // Priority 2: Free In-Browser Kokoro-82M Neural AI Voices (fast-start chunking + permanent disk cache + 2.2s stall guard!)
   if (state.kokoroStatus === "ready") {
-    const chunks = splitSpeechChunks(spoken);
+    const chunks = splitKokoroChunks(spoken);
     const playKokoroChunk = (chunkIdx) => {
       if (myRun !== runId || !state.isRunning) return;
       if (chunkIdx >= chunks.length) {
@@ -2234,25 +2354,39 @@ function runLoop() {
 
       const cfg = getKokoroConfig(cur.speaker);
       const cacheKey = `${cfg.voice}:${cfg.speed}:${chunks[chunkIdx]}`;
-      if (!kokoroAudioCache.has(cacheKey)) {
+      const alreadyInRam = kokoroAudioCache.has(cacheKey);
+      if (!alreadyInRam) {
         state.isGeneratingVoice = true;
         state.isSpeaking = false;
         renderStage();
       }
 
+      // Queue remaining chunks of this line right away (plus upcoming lines once first chunk starts!)
       for (let k = chunkIdx + 1; k < chunks.length; k++) {
         requestKokoroChunkUrl(chunks[k], cur.speaker, false);
       }
 
+      let fellBack = false;
+      // Never stall rehearsal waiting >2.2s for an uncached clip on a slower mobile CPU!
+      // Kokoro keeps caching it in the background so the next rehearsal of this scene is instant (0ms).
+      const stallTimer = (!alreadyInRam && chunkIdx === 0) ? setTimeout(() => {
+        if (myRun !== runId || !state.isRunning || fellBack) return;
+        fellBack = true;
+        state.isGeneratingVoice = false;
+        prefetchUpcomingKokoroCues(state.currentIndex, false);
+        speakWithBrowserVoice();
+      }, 2200) : null;
+
       requestKokoroChunkUrl(chunks[chunkIdx], cur.speaker, true).then(url => {
-        if (myRun !== runId || !state.isRunning) return;
+        if (stallTimer) clearTimeout(stallTimer);
+        if (fellBack || myRun !== runId || !state.isRunning) return;
         state.isGeneratingVoice = false;
         if (!url) {
           speakWithBrowserVoice();
           return;
         }
         if (chunkIdx === chunks.length - 1) {
-          prefetchUpcomingKokoroCues(state.currentIndex);
+          prefetchUpcomingKokoroCues(state.currentIndex, false);
         }
         state.isSpeaking = true;
         renderStage();
@@ -2261,7 +2395,7 @@ function runLoop() {
           myRun,
           () => {
             if (chunkIdx + 1 < chunks.length) {
-              stepTimer = setTimeout(() => playKokoroChunk(chunkIdx + 1), 55);
+              stepTimer = setTimeout(() => playKokoroChunk(chunkIdx + 1), 45);
             } else {
               state.isSpeaking = false;
               advanceAfter(180);
@@ -2574,7 +2708,7 @@ function renderStage() {
       const projState = fb ? (fb.projectionOk ? "pass" : "warn") : "idle";
       const exprState = fb ? (fb.expressionOk ? "pass" : "warn") : "idle";
       const pct = Math.min(100, Math.max(0, state.liveProjectionPct || 0));
-      const showAcoustic = !IS_IOS;
+      const showAcoustic = !IS_MOBILE_DEVICE;
 
       statusHtml = `
         <div class="px-3.5 py-3 rounded-xl bg-[var(--background)] border ${isRetry ? "border-[var(--warning)] coach-nudge" : "border-[var(--primary)]/40"} space-y-2 text-xs">
@@ -2707,14 +2841,14 @@ function wireEvents() {
     }
     saveState();
     renderAll();
-    prefetchUpcomingKokoroCues(state.currentIndex - 1);
+    prefetchUpcomingKokoroCues(state.currentIndex, true);
   });
 
   document.getElementById("sceneSelect").addEventListener("change", e => {
     const sc = state.script.scenes.find(s => s.id === e.target.value);
     if (!sc) return;
     jumpToLine(sc.startIndex, false);
-    prefetchUpcomingKokoroCues(sc.startIndex - 1);
+    prefetchUpcomingKokoroCues(state.currentIndex, true);
   });
 
   document.getElementById("btnPlayPause").addEventListener("click", () => {
