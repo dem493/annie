@@ -1,0 +1,2627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <style id="standalone-browser-theme">
+    :root {
+      --background: #f8f6f2;
+      --content: #ffffff;
+      --card: #ffffff;
+      --sidebar: #f3efe8;
+      --border: #e5dfd5;
+      --card-border: #e5dfd5;
+      --foreground: #1c1917;
+      --muted-foreground: #6b635a;
+      --primary: #b91c1c;
+      --primary-foreground: #ffffff;
+      --secondary: #f1ebe2;
+      --secondary-foreground: #44403c;
+      --accent: #fef2f2;
+      --success: #15803d;
+      --warning: #b45309;
+      --error: #dc2626;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: #141210;
+        --content: #1c1917;
+        --card: #1f1c19;
+        --sidebar: #181512;
+        --border: #332e29;
+        --card-border: #332e29;
+        --foreground: #f5f1eb;
+        --muted-foreground: #a89f94;
+        --primary: #e05252;
+        --primary-foreground: #ffffff;
+        --secondary: #2b2622;
+        --secondary-foreground: #e7e1d8;
+        --accent: #2c1c1c;
+        --success: #4ade80;
+        --warning: #fbbf24;
+        --error: #f87171;
+      }
+    }
+  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Annie JR. — Line Rehearsal</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
+    .script-serif { font-family: Georgia, "Times New Roman", serif; }
+    .cue-enter { animation: cueIn 160ms ease-out; }
+    @keyframes cueIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .wave-bars {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 12px;
+    }
+    .wave-bars span {
+      width: 2.5px;
+      border-radius: 2px;
+      background: currentColor;
+      animation: eq 700ms ease-in-out infinite;
+    }
+    .wave-bars span:nth-child(2) { animation-delay: 140ms; }
+    .wave-bars span:nth-child(3) { animation-delay: 280ms; }
+    @keyframes eq {
+      0%, 100% { height: 3px; }
+      50% { height: 12px; }
+    }
+    .my-card-tint {
+      background: color-mix(in srgb, var(--primary) 10%, var(--card));
+      border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+    }
+    .btn-tap { transition: opacity 120ms ease, border-color 120ms ease, transform 90ms ease; }
+    .btn-tap:active { transform: scale(0.98); }
+    .coach-nudge { animation: coachNudge 260ms ease-out; }
+    @keyframes coachNudge {
+      0% { opacity: 0.4; transform: translateX(-4px); }
+      45% { transform: translateX(4px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    .pill-pass {
+      background: color-mix(in srgb, var(--success) 15%, var(--card));
+      border-color: color-mix(in srgb, var(--success) 55%, var(--border));
+      color: var(--success);
+    }
+    .pill-warn {
+      background: color-mix(in srgb, var(--warning) 16%, var(--card));
+      border-color: color-mix(in srgb, var(--warning) 60%, var(--border));
+      color: var(--foreground);
+    }
+    .pill-idle {
+      background: var(--card);
+      border-color: var(--border);
+      color: var(--muted-foreground);
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased min-h-screen flex flex-col">
+
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-6 space-y-5">
+
+    <!-- HEADER & SIMPLE SETUP -->
+    <section class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 sm:p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 class="text-base font-bold tracking-tight">Annie JR. Line Practice</h1>
+          <p class="text-xs text-[var(--muted-foreground)]">Pick your character, pick where to start, and press Start.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div id="kokoroStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--background)] text-[11px] font-medium text-[var(--muted-foreground)]">
+            <span>Loading AI voices…</span>
+          </div>
+          <span id="pageIndicator" class="text-xs font-mono text-[var(--muted-foreground)]">p. 1</span>
+        </div>
+      </div>
+
+      <!-- Main Characters -->
+      <div class="space-y-1.5">
+        <div class="text-xs font-medium text-[var(--muted-foreground)]">Character</div>
+        <div id="characterRow" class="grid grid-cols-3 gap-2"></div>
+      </div>
+
+      <!-- Start Scene -->
+      <label class="block space-y-1 pt-1">
+        <span class="text-xs font-medium text-[var(--muted-foreground)]">Start Scene</span>
+        <select id="sceneSelect" class="w-full px-3 py-2 text-xs rounded-xl bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"></select>
+      </label>
+    </section>
+
+    <!-- STAGE AREA -->
+    <section class="space-y-3">
+      <!-- Previous Cue Context -->
+      <div id="prevCueBox"></div>
+
+      <!-- Active Line Spotlight -->
+      <div id="activeCard" class="cue-enter"></div>
+    </section>
+
+    <!-- SIMPLE TRANSPORT CONTROLS -->
+    <section class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <button id="btnBack" class="btn-tap inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        Back
+      </button>
+
+      <button id="btnPlayPause" class="btn-tap inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 text-sm font-semibold">
+        <span id="playPauseIcon" class="inline-flex items-center">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        </span>
+        <span id="playPauseLabel">Start Rehearsal</span>
+      </button>
+
+      <button id="btnNext" class="btn-tap inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium">
+        Next
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+    </section>
+
+    <!-- SUBTLE OPTIONAL STUDIO AI VOICES FOOTER -->
+    <footer class="text-center space-y-2 pt-1">
+      <button id="btnToggleAiVoicePanel" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline">
+        <span id="aiVoiceStatusLink">Voice settings (Built-in free Neural AI active)</span>
+      </button>
+      <div id="aiVoicePanel" class="hidden max-w-md mx-auto bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 text-left space-y-2 text-xs">
+        <div class="font-semibold text-[var(--foreground)]">Voice Engine</div>
+        <p class="text-[var(--muted-foreground)] leading-relaxed">Free in-browser <strong>Kokoro-82M Neural AI</strong> voices run locally in your browser (downloads ~86 MB once and caches for future sessions). Optionally paste an OpenAI API key below to override with cloud actor voices:</p>
+        <div class="flex items-center gap-2">
+          <input id="openaiKeyInput" type="password" placeholder="sk-... (optional)" class="flex-1 px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]" />
+          <button id="btnSaveAiKey" class="btn-tap px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-semibold">Save</button>
+          <button id="btnClearAiKey" class="btn-tap px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)]">Clear</button>
+        </div>
+        <div id="aiVoiceMsg" class="hidden text-xs text-[var(--success)]"></div>
+      </div>
+    </footer>
+
+  </main>
+
+<script>
+// ============================================================================
+// PRELOADED SCRIPT DATA: YC Annie JR Script 2026
+// ============================================================================
+const BUILTIN_RAW = {"title":"Annie JR. (2026)","subtitle":"Young Children's Script for 25","cast":[[1,"Annette / Boylan Sister",["Annette","Boylan Sister"],["SERVANTS","BOYLAN_SISTERS"]],[2,"Annie",["Annie"],["ORPHANS"]],[3,"Audrey",["Audrey"],["ORPHANS"]],[4,"Bert Healy / Officer Ward",["Bert Healy","Officer Ward"],[]],[5,"Bundles / Louis Howe / Usher / SFX Operator",["Bundles","Louis Howe","Usher","SFX Operator"],[]],[6,"Cecille / Boylan Sister",["Cecille","Boylan Sister"],["SERVANTS","BOYLAN_SISTERS"]],[7,"Drake / Apple Seller / Sound Engineer",["Drake","Apple Seller","Sound Engineer"],["SERVANTS"]],[8,"Duffy",["Duffy"],["ORPHANS"]],[9,"Emily",["Emily"],["ORPHANS"]],[10,"Grace Farrell",["Grace Farrell"],[]],[11,"July",["July"],["ORPHANS"]],[12,"Kate",["Kate"],["ORPHANS"]],[13,"Lily St. Regis",["Lily St. Regis"],[]],[14,"Lizzie",["Lizzie"],["ORPHANS"]],[15,"Miss Hannigan",["Miss Hannigan"],[]],[16,"Molly",["Molly"],["ORPHANS"]],[17,"Mrs. Greer / Boylan Sister",["Mrs. Greer","Boylan Sister"],["SERVANTS","BOYLAN_SISTERS"]],[18,"Mrs. Pugh / Boylan Sister",["Mrs. Pugh","Boylan Sister"],["SERVANTS","BOYLAN_SISTERS"]],[19,"Pepper",["Pepper"],["ORPHANS"]],[20,"President Roosevelt / Dog Catcher / Angry New Yorker / Sound Engineer",["President Roosevelt","Dog Catcher","Angry New Yorker","Sound Engineer"],[]],[21,"Rooster Hannigan",["Rooster Hannigan"],[]],[22,"Sarah",["Sarah"],["ORPHANS"]],[23,"Star-to-Be / Sandy / SFX Operator",["Star-to-Be","Sandy","SFX Operator"],[]],[24,"Tessie",["Tessie"],["ORPHANS"]],[25,"Warbucks",["Warbucks"],[]]],"items":[["sc",1,1,"New York City Municipal Orphanage"],["dr",1,"(Shortly after 3:00 am on a chilly morning in early December 1933. The stage is nearly dark. Asleep in the dormitory are several orphan girls.)"],["ln",1,"MOLLY","(awaking from a dream and crying out) Mama! Mama! Mommy!",0,[16],""],["ln",1,"PEPPER","Shut up!",0,[19],""],["ln",1,"DUFFY","Can’t anybody get any sleep around here?",0,[8],""],["ln",1,"MOLLY","Mama! Mommy!",0,[16],""],["ln",1,"PEPPER","I said shut your trap, Molly!",0,[19],""],["dr",1,"(Pepper shoves Molly.)"],["ln",1,"JULY","Ahh, stop shovin’ the poor kid. She ain’t done nuthin’ to you!",0,[11],""],["ln",1,"PEPPER","She’s keepin’ me awake, ain’t she?",0,[19],""],["ln",1,"JULY","How ‘bout I make a pancake outta you?",0,[11],""],["dr",1,"(Pepper and July fight.)"],["ln",1,"TESSIE","Oh my goodness, oh my goodness, they’re fightin’ and I won’t get no sleep all night. Oh my goodness, oh my goodness!",0,[24],""],["dr",1,"(Annie runs in with a bucket. She has been up all night cleaning.)"],["ln",1,"ANNIE","Pipe down, all of ya. Go back to sleep. (to Molly) It’s all right, Molly. Annie’s here.",0,[2],""],["ln",1,"MOLLY","Annie, read me your note.",0,[16],""],["ln",1,"ANNIE","Again?",0,[2],""],["ln",1,"MOLLY","Please?",0,[16],""],["ln",1,"PEPPER","Here it comes again.",0,[19],""],["ln",1,"ANNIE","(She takes a crumpled note from her pocket and reads it to Molly) “Please take good care of our little darling. Her name is Annie.”",0,[2],""],["ln",2,"KATE","(mockingly; she has heard this note a thousand times) “She was born on October 28th. We will be back to get her soon.”",0,[12],""],["ln",2,"PEPPER","(mockingly) “We have left half of a silver locket around her neck and kept the other half–”",0,[19],""],["ln",2,"DUFFY, KATE, PEPPER","“So that when we come back for her, you will know that she’s our baby.”",0,[8,12,19],""],["ln",2,"TESSIE","Oh my goodness, oh my goodness, now they’re laughing.",0,[24],""],["ln",2,"ANNIE","All right. Do you wanna sleep with your teeth insida your mouth or out?!",0,[2],""],["ln",2,"SARAH","It’s nice to imagine what your folks were like.",0,[22],""],["ln",2,"LIZZIE","I remember someone soft and warm, holdin’ me and singin’ to me.",0,[14],""],["ln",2,"DUFFY","Aw, who needs folks - I ain’t got ‘em and I don’t need ‘em.",0,[8],""],["ln",2,"AUDREY","You’re lying, Duffy, we all want folks.",0,[3],""],["ln",2,"MOLLY","Gee, I dream about havin’ a mother and father again. But you’re lucky. You really got ‘em.",0,[16],""],["sg",2,"Maybe","Orphans"],["ln",2,"ANNIE","(fingering her locket) I know. (cuddled with Molly) Somewhere.",0,[2],""],["ln",2,"ANNIE","MAYBE FAR AWAY OR MAYBE REAL NEARBY",1,[2],""],["ln",2,"Annie","HE MAY BE POURIN’ HER COFFEE\nSHE MAY BE STRAIGHTIN’ HIS TIE\nMAYBE IN A HOUSE ALL HIDDEN BY A HILL",1,[2],""],["ln",2,"Tessie","SHE’S SITTIN’ PLAYIN’ PIANO\nHE’S SITTIN’ PAYIN’ A BILL",1,[24],""],["ln",2,"July","BETCHA THEY’RE YOUNG\nBETCHA THEY’RE SMART",1,[11],""],["ln",2,"Duffy","BET THEY COLLECT THINGS\nLIKE ASHTRAYS AND ART!",1,[8],""],["ln",2,"Pepper","BETCHA THEY’RE GOOD.\nWHY SHOULDN’T THEY BE?",1,[19],""],["ln",3,"Orphans","THEIR ONE MISTAKE WAS GIVIN’ UP ME!",1,[],"ORP"],["ln",3,"Molly","SO MAYBE NOW IT’S TIME\nAND MAYBE WHEN I WAKE",1,[16],""],["ln",3,"Orphans","THEY’LL BE THERE CALLING ME BABY\nMAYBE",1,[],"ORP"],["dr",3,"(Annie tucks in the orphans one by one, saying goodnight.)"],["ln",3,"Audrey","BETCHA HE READS,\nBETCHA SHE SEWS",1,[3],""],["ln",3,"Emily","MAYBE SHE’S MADE ME\nA CLOSET OF CLOTHES",1,[9],""],["ln",3,"Sarah","MAYBE THEY’RE STRICT,\nAS STRAIGHT AS A LINE",1,[22],""],["ln",3,"Lizzie","DON’T REALLY CARE\nAS LONG AS THEIR MINE!",1,[14],""],["ln",3,"Annie","SO MAYBE NOW THIS PRAYER’S THE LAST ONE OF ITS KIND\nWON’T YOU PLEASE COME GET YOUR BABY?",1,[2],""],["ln",3,"Orphans","MAYBE",1,[],"ORP"],["dr",3,"(A moment of stillness in the orphanage as all of the orphans are asleep. Then, a faraway church bell chimes. 4:00 am. Annie gets up and reveals a knapsack that’s been tucked away. She starts shoving things inside. The orphans are dimly seen waking up as Annie turns on a flashlight.)"],["ln",3,"KATE","Annie, whattaya doin’?",0,[12],""],["ln",3,"ANNIE","Runnin’ away.",0,[2],""],["ln",3,"TESSIE","Oh my goodness.",0,[24],""],["ln",3,"ANNIE","(putting on her sweater) My folks are never comin’ for me. I gotta go find them.",0,[2],""],["ln",3,"EMILY","Annie, you’re crazy. Miss Hannigan’ll catch you.",0,[9],""],["ln",4,"SARAH","And give you the paddle.",0,[22],""],["ln",4,"ANNIE","I don’t care. I’m gettin’ outta here. (putting the knapsack over her shoulder) Okay, I’m ready. Wish me luck.",0,[2],""],["ln",4,"ALL EXCEPT PEPPER","(ad lib) Good luck, Annie.",0,[],"ORP_XP"],["ln",4,"PEPPER","So long, dumbbell. And good luck.",0,[19],""],["dr",4,"(Annie sneaks toward the door. As she reaches for the handle, it flings open. Miss Hannigan, wearing a robe, bathed in an eerie light, stands witch-like before Annie.)"],["ln",4,"MISS HANNIGAN","Aha! Caught ya! (She flings Annie to the floor and switches on the light.) Get up. Get up! Rotten orphan.",0,[15],""],["ln",4,"ANNIE","(angrily) I’m not an orphan! My mother and father left a note saying they loved me and they were coming back for me.",0,[2],""],["ln",4,"MISS HANNIGAN","That was 1922. This is 1933. (blows a whistle) Get up! Now, for this one’s shenanigans, you’ll all get down on your knobby little knees and clean this dump until it shines like the top of the Chrysler building!",0,[15],""],["ln",4,"TESSIE","(starting to cry) But it’s four o’clock in the morning.",0,[24],""],["ln",4,"MISS HANNIGAN","(mocking) But it’s four o’clock in the morning. (blows whistle) Get to work.",0,[15],""],["ln",4,"ORPHANS","Yes, Miss Hannigan.",0,[],"ORP"],["ln",4,"MISS HANNIGAN","Now! (They run for their cleaning supplies) Why any kid would want to be an orphan, I’ll never know.",0,[15],""],["sg",4,"It’s the Hard-Knock Life","Orphans"],["ln",4,"Orphans","IT’S THE HARD-KNOCK LIFE FOR US!\nIT’S THE HARD-KNOCK LIFE FOR US!",1,[],"ORP"],["ln",4,"Annie","‘STEAD OF TREATED",1,[2],""],["ln",4,"Orphans","WE GET TRICKED!",1,[],"ORP"],["ln",5,"Annie","‘STEAD OF KISSES",1,[2],""],["ln",5,"Orphans","WE GET KICKED!\nIT’S THE HARD-KNOCK LIFE!",1,[],"ORP"],["ln",5,"Orphans","GOT NO FOLKS TO SPEAK OF SO\nIT’S THE HARD-KNOCK ROW WE HOE!",1,[],"ORP"],["ln",5,"Annie","COTTON BLANKETS",1,[2],""],["ln",5,"Orphans","‘STEAD OF WOOL!",1,[],"ORP"],["ln",5,"Annie","EMPTY BELLIES",1,[2],""],["ln",5,"Orphans","‘STEAD OF FULL!\nIT’S THE HARD-KNOCK LIFE!",1,[],"ORP"],["ln",5,"Annie","DON’T IT FEEL LIKE THE WIND IS ALWAYS HOWLIN’",1,[2],""],["ln",5,"Kate, Sarah","DON’T IT SEEM LIKE THERE’S NEVER ANY LIGHT?",1,[12,22],""],["ln",5,"Duffy, Emily","ONCE A DAY, DON’T YOU WANT TO THROW THE TOWEL IN?",1,[8,9],""],["ln",5,"Molly, Pepper","IT’S EASIER THAN PUTTIN’ UP A FIGHT.",1,[16,19],""],["ln",5,"Annie","NO ONE’S THERE WHEN YOUR DREAMS AT NIGHT GET CREEPY!",1,[2],""],["ln",5,"July, Audrey","NO ONE CARES IF YOU GROW OR IF YOU SHRINK!",1,[3,11],""],["ln",5,"Tessie, Lizzie","NO ONE DRIES WHEN YOUR EYES GET WET AN’ WEEPY!",1,[14,24],""],["ln",5,"Orphans","FROM THE CRYIN’ YOU WOULD THINK THIS PLACE’D SINK!\nOH!\nEMPTY BELLY LIFE!\nROTTEN SMELLY LIFE!\nFULL OF SORROW LIFE!\nNO TOMORROW LIFE!",1,[],"ORP"],["ln",5,"Molly","SANTA CLAUS, WE NEVER SEE",1,[16],""],["ln",5,"Pepper","SANTA CLAUS, WHAT’S THAT? WHO’S HE?",1,[19],""],["ln",6,"Orphans","NO ONE CARES FOR YOU A SMIDGE\nWHEN YOU’RE IN AN ORPHANAGE!\nIT’S THE HARD-KNOCK LIFE!",1,[],"ORP"],["ln",6,"MOLLY","(imitating Miss Hannigan) You’ll stay up till this dump shines like the top of the Chrysler building!",0,[16],""],["ln",6,"Orphans, ex Molly","YANK THE WHISKERS FROM HER CHIN!",1,[],"ORP_XM"],["ln",6,"MOLLY","Little pig droppings!",0,[16],""],["ln",6,"Orphans, ex Molly","JAB HER WITH A SAFETY PIN!",1,[],"ORP_XM"],["ln",6,"MOLLY","Rotten orphans!",0,[16],""],["ln",6,"Orphans, ex Molly","MAKE HER DRINK A MICKEY FINN!",1,[],"ORP_XM"],["ln",6,"MOLLY","What do you say?!",0,[16],""],["ln",6,"ORPHANS, EXCEPT MOLLY","I love you, Miss Hannigan!",0,[],"ORP_XM"],["ln",6,"MOLLY","Get to work! Strip them beds! I said get to work!",0,[16],""],["dr",6,"(The orphans strip the beds and put the linens into the laundry basket. Molly mimes drinking from a flask, she accidentally makes her way into the laundry hamper by the end of the song.)"],["ln",6,"Orphans","IT’S THE HARD-KNOCK LIFE FOR US!\nIT’S THE HARD-KNOCK LIFE FOR US!\nNO ONE CARES FOR YOU A SMIDGE\nWHEN YOU’RE IN AN ORPHANAGE!\nIT’S THE HARD-KNOCK LIFE\nIT’S THE HARD-KNOCK LIFE…\nIT’S. THE. HARD. KNOCK. LIFE!",1,[],"ORP"],["dr",6,"(Miss Hannigan, who is a little more put-together than before, enters and blows her whistle. The orphans run to their line up positions, but Annie is hatching an idea.)"],["ln",6,"MISS HANNIGAN","Good morning, children.",0,[15],""],["ln",6,"ORPHANS","Good morning, Miss Hannigan.",0,[],"ORP"],["ln",7,"MOLLY","(from the hamper) Good morning, Miss Hannigan.",0,[16],""],["ln",7,"MISS HANNIGAN","(digging through the hamper) You. What are you doin’ in there?",0,[15],""],["ln",7,"MOLLY","Nothin’.",0,[16],""],["ln",7,"MISS HANNIGAN","(to whomever is closest to the hamper) Get her outta there! (to Molly) Your days are numbered. (blows her whistle) All right, breakfast. (Orphans groan.) And after your mush, you’ll go to your sewing machines.",0,[15],""],["ln",7,"ORPHANS","Yes, Miss Hannigan.",0,[],"ORP"],["ln",7,"BUNDLES","(entering, carrying a load of clean sheets) Laundry! Laundry Man!",0,[5],""],["ln",7,"ORPHANS","Mornin’, Bundles!",0,[],"ORP"],["ln",7,"BUNDLES","Mornin’, kids! Clean sheets once a month, whether ya need ‘em or not! (They take the new sheets, and Annie, hidden by the chaos, climbs into the laundry basket.) Hey, hey, hey, Aggie! How’s the prettiest gal south of 14th Street?",0,[5],""],["ln",7,"MISS HANNIGAN","Bundles, get outta here with that laundry!",0,[15],""],["ln",7,"BUNDLES","So long, gorgeous – and Merry Christmas!",0,[5],""],["ln",7,"MISS HANNIGAN","Yeah, yeah, Merry Christmas. (checking the floor) You call this clean, Annie? This place is a pigsty… Annie? Annie?",0,[15],""],["ln",7,"AUDREY","Annie ain’t here.",0,[3],""],["ln",7,"MISS HANNIGAN","What do you mean, “Annie ain’t here”?",0,[15],""],["ln",7,"EMILY","She just went.",0,[9],""],["ln",7,"SARAH","(giggling) With Mr. Bundles.",0,[22],""],["ln",7,"LIZZIE","In his laundry hamper.",0,[14],""],["ln",7,"MISS HANNIGAN","Bundles! (runs out) Police! Police!!",0,[15],""],["ln",7,"JULY","No more hard-knock life for Annie!",0,[11],""],["dr",8,"(The orphans cheer! Lights out.)"],["sc",8,2,"Hooverville"],["dr",8,"(Lights up on a poor street corner in New York. There’s a few garbage cans placed about. It’s a chilly December morning, a few hours later. A Dog Catcher, with a rope runs across stage, an Officer wanders the street, an Apple Seller is hawking apples.)"],["ln",8,"APPLE SELLER","Apples, apples! Two for a nickel.",0,[7],""],["ln",8,"ANNIE","(runs out to the Apple Seller) Excuse me, sir, but could you donate an apple to the orphan’s picnic?",0,[2],""],["ln",8,"APPLE SELLER","Sure kid, why not? (gives her an apple) Say kid, when is the orphan’s picnic?",0,[7],""],["ln",8,"ANNIE","(smiling) Soon as I take a bite.",0,[2],""],["dr",8,"(She takes a big bite, as the Apple Seller shakes his head at having been conned by a child. He wanders off in search of customers. The sound of barking dogs is heard from offstage. A Dog Catcher enters, and speaks to Annie.)"],["ln",8,"DOG CATCHER","You seen any stray mutts around here?",0,[20],""],["ln",8,"ANNIE","No, sir.",0,[2],""],["ln",8,"DOG CATCHER","Good. Then they must all be runnin’ around Astor Place.",0,[20],""],["dr",8,"(The Dog Catcher exits. Annie watches him go and turns to notice a dog.)"],["ln",8,"SANDY","(whimpers)",0,[23],""],["ln",8,"ANNIE","Hey, there’s one they didn’t get. (she signals for the dog to come to her. Sandy enters and crosses to Annie) They’re after you ain’t they?",0,[2],""],["ln",8,"SANDY","(sad) Ruff.",0,[23],""],["ln",8,"ANNIE","Well, they’re after me, too. But don’t worry. I ain’t gonna let them get you or me.",0,[2],""],["ln",8,"SANDY","(head to the side) Ruff!?",0,[23],""],["sg",9,"Tomorrow","Annie"],["ln",9,"ANNIE","Everything’s gonna be fine. For the both of us. If not today, well…",0,[2],""],["ln",9,"ANNIE","THE SUN’LL COME OUT TOMORROW,\nBET YOUR BOTTOM DOLLAR THAT TOMORROW\nTHERE’LL BE SUN\nJUST THINKIN’ ABOUT TOMORROW\nCLEARS AWAY THE COBWEBS AND THE SORROW\n‘TIL THERE’S NONE.",1,[2],""],["ln",9,"ANNIE","WHEN I’M STUCK WITH A DAY\nTHAT’S GRAY AND LONELY,\nI JUST STICK OUT MY CHIN,\nAND GRIN, AND SAY:",1,[2],""],["ln",9,"ANNIE","OH, THE SUN’LL COME OUT TOMORROW,\nSO YA GOTTA HANG ON 'TIL TOMORROW,\nCOME WHAT MAY!\nTOMORROW, TOMORROW!\nI LOVE YA, TOMORROW\nYOU’RE ALWAYS A DAY AWAY",1,[2],""],["dr",9,"(A policeman, Officer Ward, enters.)"],["ln",9,"OFFICER WARD","Hey, you! Little girl! Come here.",0,[4],""],["ln",9,"ANNIE","Yes, Officer?",0,[2],""],["ln",9,"OFFICER WARD","That dog there. Ain’t he a stray?",0,[4],""],["ln",9,"ANNIE","A stray? Oh, no, Officer. He’s my dog.",0,[2],""],["ln",9,"OFFICER WARD","Your dog, huh? So, what’s his name?",0,[4],""],["ln",9,"ANNIE","His name? His name is... Sandy. Right, that’s it! I call him Sandy because of his nice sandy color.",0,[2],""],["ln",9,"OFFICER WARD","Okay, let’s see him answer to his name.",0,[4],""],["ln",9,"ANNIE","Well, you see, Officer… I just got him and sometimes…",0,[2],""],["ln",9,"OFFICER WARD","Call him!",0,[4],""],["ln",9,"ANNIE","Here, Sandy. (nothing) Here boy… (nothing) Sandy! (Sandy crosses to her, she pats his head) Good Sandy! Good old Sandy!",0,[2],""],["ln",9,"OFFICER WARD","Alright... well next time you take him out, I wanna see him on a leash and with a license, or else he goes to the pound.",0,[4],""],["ln",10,"ANNIE","Yes sir, I understand.",0,[2],""],["ln",10,"OFFICER WARD","Now get along with you, before you catch your death of cold in this winter.",0,[4],""],["ln",10,"ANNIE","Oh, I don’t mind the weather!",0,[2],""],["dr",10,"(Officer Ward exits.)"],["ln",10,"Annie","WHEN I’M STUCK WITH A DAY\nTHAT’S GRAY AND LONELY,\nI JUST STICK OUT MY CHIN\nAND GRIN AND SAY, OH!",1,[2],""],["ln",10,"Annie","THE SUN’LL COME OUT TOMORROW,\nSO YA GOTTA HANG ON ‘TIL TOMORROW,\nCOME WHAT MAY!\nTOMORROW! TOMORROW!\nI LOVE YA, TOMORROW!\nYOU’RE ALWAYS A DAY AWAY.",1,[2],""],["ln",10,"Annie","TOMORROW! TOMORROW!\nI LOVE YA, TOMORROW!\nYOU’RE ALWAYS A DAY AWAY!",1,[2],""],["dr",10,"(Annie hugs Sandy. Lights out.)"],["sc",10,3,"Miss Hannigan’s Office"],["dr",10,"(Lights up as Miss Hannigan goes into her office. Tessie & Kate run in and go up to her.)"],["sg",10,"Little Girls","Miss Hannigan"],["ln",10,"TESSIE","Miss Hannigan, you know your souvenir pillow from Coney Island?",0,[24],""],["ln",10,"MISS HANNIGAN","Yeah?",0,[15],""],["ln",10,"KATE","Molly just threw up on it.",0,[12],""],["dr",10,"(Miss Hannigan threatens Tessie & Kate as they run off. Hannigan slumps into her chair, then leans forward, revealing a broken doll which she just sat upon.)"],["ln",10,"Miss Hannigan","LITTLE GIRLS, LITTLE GIRLS,\nEVERYWHERE I TURN, I CAN SEE THEM.\nLITTLE GIRLS, LITTLE GIRLS,\nNIGHT AND DAY I EAT, SLEEP AND BREATHE THEM.",1,[15],""],["ln",11,"Miss Hannigan","SOME WOMEN ARE DRIPPING WITH DIAMONDS,\nSOME WOMEN ARE DRIPPING WITH PEARLS.\nLUCKY ME! LUCKY ME!\nLOOK AT WHAT I’M DRIPPING WITH: LITTLE GIRLS!",1,[15],""],["ln",11,"Miss Hannigan","SOMEDAY I’LL STEP ON THEIR FRECKLES.\nSOME NIGHT I’LL STRAIGHTEN THEIR CURLS.\nSEND THE FLOOD, SEND THE FLU,\nANYTHING THAT YOU CAN DO TO\nLITTLE GIRLS!",1,[15],""],["dr",11,"(Miss Hannigan collapses again in her chair. Suddenly, Officer Ward enters with Annie.)"],["ln",11,"OFFICER WARD","Good afternoon. Miss Hannigan, is it? We found your runaway.",0,[4],""],["ln",11,"MISS HANNIGAN","Oh, poor punkin’, out in the freezin’ cold with just that thin sweater. I hope you didn’t catch influenza. Thanks so much again, Officer.",0,[15],""],["ln",11,"OFFICER WARD","All in the line of duty. (to Annie) And you. Don't ever let me hear that you run away again from this nice lady. (to Miss Hannigan with a little salute) Good afternoon.",0,[4],""],["ln",11,"MISS HANNIGAN","Good afternoon, Officer. (sees Officer Ward out, then reenters her office) The next time you walk out that door, it’ll be 1953. Well, are you glad to be back? Huh?",0,[15],""],["ln",11,"ANNIE","(sighs) Yes, Miss Hannigan.",0,[2],""],["ln",11,"MISS HANNIGAN","Liar. What’s the one thing I always taught you: never tell a lie.",0,[15],""],["dr",11,"(She grabs Annie around the shoulders, tossing her from side to side. Grace Farrell enters.)"],["ln",11,"GRACE","Good afternoon. Miss Hannigan?",0,[10],""],["ln",11,"MISS HANNIGAN","Yes?",0,[15],""],["ln",11,"GRACE","I’m Grace Farrell, private secretary to Oliver Warbucks. (she sits)",0,[10],""],["ln",11,"MISS HANNIGAN","The Oliver Warbucks? The millionaire?",0,[15],""],["ln",11,"GRACE","No, no… The billionaire. Mr. Warbucks has decided to invite an orphan to spend the Christmas holidays at his home.",0,[10],""],["ln",11,"MISS HANNIGAN","(sitting at her desk, pulling out her files) What sort of orphan did he have in mind?",0,[15],""],["ln",11,"GRACE","Well, she should be friendly. (standing just behind Miss Hannigan is Annie - she waves at Grace) And intelligent.",0,[10],""],["ln",12,"ANNIE","Mississippi. Capital M-I-double S-I-double S-I-double P-I. Mississippi!",0,[2],""],["ln",12,"GRACE","And cheerful.",0,[10],""],["dr",12,"(Annie laughs.)"],["ln",12,"MISS HANNIGAN","(kicks Annie to quiet her, to Grace) How old?",0,[15],""],["ln",12,"GRACE","Oh, age doesn’t really matter. Oh say, eight or nine. (Annie gestures upward to indicate she wants GRACE to say a higher age) Ten. (Annie gestures a little higher) Eleven? (Annie gives Grace a thumbs up) Yes, eleven would be perfect. (Annie gestures to her hair) And oh, I almost forgot: Mr. Warbucks prefers redheaded children.",0,[10],""],["ln",12,"MISS HANNIGAN","(looks up from her files) Eleven? And a redhead? …Sorry, we don’t have any orphans like that.",0,[15],""],["ln",12,"GRACE","(Grace stands and gestures to Annie) What about this child right here?",0,[10],""],["dr",12,"(Miss Hannigan stands up, rushes in between Grace and Annie and pins Annie behind her back.)"],["ln",12,"MISS HANNIGAN","Annie? Oh, no. You don’t want her.",0,[15],""],["ln",12,"GRACE","(standing up straight and looking Miss Hannigan in the eye) Hmm... Perhaps I should call the Board of Orphans and –",0,[10],""],["ln",12,"MISS HANNIGAN","(she nervously laughs) Fine. If it’s Annie you want, it’s Annie you get.",0,[15],""],["ln",12,"GRACE","If you’ll get her coat, I’ll take her along right now.",0,[10],""],["ln",12,"MISS HANNIGAN","She don’t have no coat.",0,[15],""],["ln",12,"GRACE","Then we’ll buy her one. Come along, Annie. Mr. Warbucks’ limousine is outside.",0,[10],""],["ln",12,"ANNIE","Oh, boy! I can hardly believe it!",0,[2],""],["ln",12,"MISS HANNIGAN","She can hardly believe it?",0,[15],""],["dr",12,"(Grace and Annie start to leave. The orphans gather around Annie, having clearly overheard what was happening.)"],["ln",12,"ANNIE","Hey kids, I’m getting out for Christmas. I’ll write to ya!",0,[2],""],["dr",12,"(Annie and the Orphans say goodbye. As Grace and Annie exit, the orphans run past Miss Hannigan, screaming and cheering. Lights out.)"],["sc",13,4,"Warbucks’ Mansion"],["dr",13,"(Lights up on the foyer of a grand mansion a few hours later. Drake, the English butler, is supervising the servants of the house, who are bustling around at work. Grace Farrell and Annie enter. Annie is wearing a new hat and coat.)"],["ln",13,"DRAKE","Good afternoon, Miss Farrell.",0,[7],""],["ln",13,"GRACE","Good afternoon, Drake. Everyone.",0,[10],""],["ln",13,"SERVANTS","Good afternoon, Miss.",0,[],"SRV"],["ln",13,"GRACE","This is Annie. She’ll be with us for Christmas. (to Annie) Annie, this is everyone.",0,[10],""],["ln",13,"DRAKE","May I take your coat, Miss?",0,[7],""],["ln",13,"ANNIE","Will I get it back?",0,[2],""],["ln",13,"GRACE","Of course, dear. Now, what do you want to do first?",0,[10],""],["ln",13,"ANNIE","The floors. I’ll scrub them first; then I’ll get to the windows.",0,[2],""],["ln",13,"MRS. PUGH","Annie, you won’t have to do any cleaning.",0,[18],""],["ln",13,"CECILLE","You’re our guest.",0,[6],""],["sg",13,"I Think I’m Gonna Like it Here","Grace, Annie, Servants"],["ln",13,"GRACE","And for the next two weeks, you’re going to have a swell time. Now…",0,[10],""],["ln",13,"GRACE","CECILLE WILL PICK OUT ALL YOUR CLOTHES",1,[10],""],["ln",13,"CECILLE","Green is her best color; no, blue, I think.",0,[6],""],["ln",13,"Grace","YOUR BATH IS DRAWN BY MRS. GREER",1,[10],""],["ln",13,"MRS. GREER","Soap… no, bubbles, I think.",0,[17],""],["ln",13,"Grace","ANNETTE COMES IN TO MAKE YOUR BED",1,[10],""],["ln",13,"ANNETTE","The silk; no, the satin sheets, I think.",0,[1],""],["ln",13,"Annie","I THINK I’M GONNA LIKE IT HERE!",1,[2],""],["ln",13,"Grace, Servants","WHEN YOU WAKE, RING FOR DRAKE\nDRAKE WILL BRING YOUR TRAY\nWHEN YOU’RE THROUGH, MRS. PUGH\nCOMES TO TAKE IT AWAY!",1,[10],"SRV"],["ln",14,"Grace","NO NEED TO PICK UP ANY TOYS",1,[10],""],["ln",14,"ANNIE","That’s okay, I haven’t got any, anyway!",0,[2],""],["ln",14,"Grace","NO FINGER WILL YOU LIFT MY DEAR!",1,[10],""],["ln",14,"Grace, Servants","WE HAVE BUT ONE REQUEST:\nPLEASE PUT US TO THE TEST",1,[10],"SRV"],["ln",14,"Annie","I KNOW I’M GONNA LIKE IT HERE!\nUSED TO ROOM IN A TOMB\nWHERE I’D SIT AND FREEZE.\nGET ME NOW, HOLY COW!\nCOULD SOMEONE PINCH ME PLEASE?",1,[2],""],["dr",14,"(A servant pinches Annie, she reacts.)"],["ln",14,"GRACE","She didn’t mean it!",0,[10],""],["ln",14,"GRACE","WE’VE NEVER HAD A LITTLE GIRL",1,[10],""],["ln",14,"Servants","WE’VE NEVER HAD A LITTLE GIRL",1,[],"SRV"],["ln",14,"Annie","I’M VERY GLAD TO VOLUNTEER!",1,[2],""],["ln",14,"Grace, Servants","WE HOPE YOU UNDERSTAND\nYOUR WISH IS OUR COMMAND!",1,[10],"SRV"],["ln",14,"Annie","I KNOW I’M GONNA LIKE IT HERE!",1,[2],"","Grace, Servants"],["ln",14,"Grace, Servants","WE KNOW YOU’RE GONNA LIKE IT HERE!",1,[10],"SRV","Annie"],["ln",14,"Grace, Servants","(spoken) Welcome!",0,[10],"SRV"],["ln",14,"WARBUCKS","(offstage) Where is everybody?! (Oliver Warbucks enters, carrying a briefcase and a suitcase. A servant takes those from him as Drake helps him take off his overcoat.) Hello, everybody.",0,[25],""],["ln",14,"ALL STAFF","Sir.",0,[],"SRV"],["ln",14,"WARBUCKS","All right, good to see you all again. Drake, dismiss the staff.",0,[25],""],["ln",14,"DRAKE","Yes, sir.",0,[7],""],["dr",14,"(Drake signals them. The servants exit.)"],["ln",14,"WARBUCKS","And Grace, if you’ll get your notebook… (Warbucks turns to speak to Grace, and for the first time, notices Annie) Who is that?",0,[25],""],["ln",14,"GRACE","This is Annie, sir: the orphan who will be with us for Christmas.",0,[10],""],["ln",15,"WARBUCKS","That’s not a boy. Orphans are boys.",0,[25],""],["ln",15,"GRACE","I’m sorry, sir, you just said “orphan”, so I chose a girl.",0,[10],""],["ln",15,"WARBUCKS","Well, I suppose she’ll have to do. (aside to Grace) What are we supposed to do with this child?",0,[25],""],["ln",15,"GRACE","(aside to Warbucks) It is her first night here, sir.",0,[10],""],["ln",15,"WARBUCKS","Well, Annie, I suppose we ought to do something special on your first night. (has an idea) Would you like to go to a movie?",0,[25],""],["dr",15,"(Annie checks in with Grace to see if this would be all right. Grace nods.)"],["ln",15,"ANNIE","Gosh, Mr. Warbucks, I’ve never been to one.",0,[2],""],["ln",15,"WARBUCKS","Then you’ll go with Grace to the Roxy. And then an ice-cream soda at Rumpelmayer’s and a hansom cab ride around Central Park.",0,[25],""],["ln",15,"ANNIE","(disappointed) Aw, gee. It’s just that… well… I thought you were going to take me.",0,[2],""],["ln",15,"WARBUCKS","(regards Annie and is moved by her disappointment, calls offstage) Drake!",0,[25],""],["ln",15,"DRAKE","(entering) Yes, sir?",0,[7],""],["ln",15,"WARBUCKS","Get our coats. Grace, you’ll come too, of course.",0,[25],""],["ln",15,"DRAKE","Which car will you be wanting, sir?",0,[7],""],["ln",15,"WARBUCKS","The Duesenberg. No, wait. This child’s been cooped up in an orphanage. We’ll walk.",0,[25],""],["ln",15,"GRACE","Walk to the Roxy?",0,[10],""],["sc",15,5,"New York City / The Roxy"],["dr",15,"(As Drake helps Warbucks into his coat, Grace helps Annie into hers. The set changes to upper Fifth Avenue. Warbucks strolls downstage, as Drake helps Grace into her coat, and they join Warbucks.)"],["ln",15,"WARBUCKS","Why not? It’s only 45 blocks! Ah, smell those bus fumes! There’s no air like the air of New York. Come on, you slowpokes! We gotta get to the Roxy before the prices change.",0,[25],""],["dr",15,"(New Yorkers enter, going about their business as Warbucks, Grace, and Annie stroll the city.)"],["sg",16,"N.Y.C.","Warbucks, Grace, Annie, Star-to-Be, New Yorkers"],["ln",16,"Warbucks, Grace","N.Y.C. THE SHIMMER OF TIMES SQUARE\nTHE PULSE, THE BEAT, THE DRIVE!",1,[10,25],""],["ln",16,"Warbucks","N.Y.C. YOU MIGHT SAY THAT I’M SQUARE,\nBUT WOW! I COME ALIVE!",1,[25],""],["ln",16,"All","THE CITY’S BRIGHT AS A PENNY ARCADE\nIT BLINKS. IT TILTS. IT RINGS!",1,[],"ALL"],["ln",16,"Annie","TO THINK THAT I’VE LIVED HERE ALL OF MY LIFE\nAND NEVER SEEN THESE THINGS!",1,[2],""],["ln",16,"All","N.Y.C. THE WHOLE WORLD KEEPS COMING\nBY BUS… BY TRAIN… YOU CAN’T EXPLAIN\nTHEIR YEN FOR -",1,[],"ALL"],["ln",16,"Star-to-Be","N.Y.C. JUST GOT HERE THIS MORNING:\nTHREE BUCKS, TWO BAGS, ONE ME!\nN.Y.C. I GIVE YOU FAIR WARNING:\nUP THERE IN LIGHTS, I’LL BE!",1,[23],""],["ln",16,"Star-to-Be","GO ASK THE GERSHWINS OR KAUFMAN AND HART\nTHE PLACE THEY LOVE THE BEST!\nTHOUGH CALIFORNIA PAYS BIG FOR THEIR ART,\nTHEIR FAN MAIL COMES ADDRESSED",1,[23],""],["ln",16,"All","TO N.Y.C. TOMORROW A PENTHOUSE\nTHAT’S WAY UP HIGH",1,[],"ALL"],["ln",16,"Star-to-Be","TONIGHT? THE “Y”, WHY NOT?\nIT’S N.Y.C.!",1,[23],""],["ln",16,"All","N.Y.C. YOU’RE STANDING ROOM ONLY\nYOU CROWD, YOU CRAMP, YOU’RE STILL THE CHAMP!\nAMEN! FOR N… Y… –",1,[],"ALL"],["ln",16,"ANGRY NEW YORKER","Keep it quiet down there!",0,[20],""],["ln",16,"All","(quietly)  C…",1,[],"ALL"],["dr",16,"(The stage dims, as New Yorkers break off and exit, revealing The Roxy seating and an Usher with a flashlight. They direct Warbucks, Grace, and Annie to the empty seats.)"],["ln",16,"USHER","Immediate seating… there is immediate seating.",0,[5],""],["ln",17,"WARBUCKS","Popcorn, what do you say to some popcorn? I haven’t had popcorn since…",0,[25],""],["dr",17,"(Annie yawns and leans against Warbucks’ sleeve, calling asleep.)"],["ln",17,"Warbucks","GIVE IN. DON’T FIGHT. GOOD GIRL, GOODNIGHT.\nSLEEP TIGHT IN N.Y.C.",1,[25],""],["dr",17,"(Lights out.)"],["sc",17,6,"Miss Hannigan’s Office"],["dr",17,"(Lights up on Miss Hannigan, listening to her radio. We hear: “Once again, we bring you the Romance of Helen Trent, who sets out to prove that just because a woman is thirty-five, romance in life need not be over…” from the host, as the opening music of the radio show begins.)"],["ln",17,"MISS HANNIGAN","God, I hope not.",0,[15],""],["dr",17,"(Grace enters.)"],["ln",17,"GRACE","Good afternoon, Miss Hannigan. (hands Miss Hannigan a legal document) This has to be signed and set back to the Board of Orphans no later than 10 o’clock tomorrow.",0,[10],""],["ln",17,"MISS HANNIGAN","(she switches the radio off) What for?",0,[15],""],["ln",17,"GRACE","Because Mr. Warbucks is so taken with Annie that he wants to adopt her.",0,[10],""],["ln",17,"MISS HANNIGAN","Would you excuse me for a moment, please? (she goes through the door, lets out a long, loud scream of fury and frustration, then returns to her office) Got any more wonderful news?",0,[15],""],["ln",17,"GRACE","Merry Christmas, Miss Hannigan.",0,[10],""],["dr",17,"(As Grace goes to exit, she bumps into Rooster.)"],["ln",17,"ROOSTER","Oops! Pardon me, doll. (Grace looks put off as she exits.) Hi ya, sis! Long time, no see!",0,[21],""],["ln",17,"MISS HANNIGAN","Rooster? They finally let you outta prison? What were you in for this time?",0,[15],""],["ln",17,"ROOSTER","Some old geezer said that I swindled him outta eleven hundred bucks.",0,[21],""],["ln",17,"MISS HANNIGAN","Why’d he say that?",0,[15],""],["ln",17,"LILY ST. REGIS","(entering) Because the Rooster swindled him outta eleven hundred bucks.",0,[13],""],["ln",17,"ROOSTER","Sis, I’d like you to meet a friend of mine from…",0,[21],""],["ln",17,"LILY ST. REGIS","Jersey City!",0,[13],""],["ln",18,"ROOSTER","So who was the broad I bumped into when I came in? Looked like she had a couple a’dollars.",0,[21],""],["ln",18,"MISS HANNIGAN","She works for Oliver Warbucks.",0,[15],""],["ln",18,"LILY ST. REGIS","The Oliver Warbucks? The millionaire?",0,[13],""],["ln",18,"MISS HANNIGAN","No. The billionaire. Annie, one of the orphans from here, is getting adopted by him.",0,[15],""],["ln",18,"LILY ST. REGIS","Crummy orphan!",0,[13],""],["ln",18,"ROOSTER","Yeah, livin’ in the lap of luxury while the two Hannigan kids ended up on the skids!",0,[21],""],["sg",18,"Easy Street","Rooster, Miss Hannigan, Lily St. Regis"],["ln",18,"Rooster","IT AIN’T FAIR HOW WE SCROUNGE FOR THREE OR FOUR BUCKS\nWHILE SHE GETS WARBUCKS.",1,[21],""],["ln",18,"Hannigan","THE LITTLE BRAT!\nIT AIN’T FAIR! THIS HERE LIFE IS DRIVIN’ ME NUTS.\nWHILE WE GET PEANUTS, SHE’S LIVIN’ FAT!",1,[15],""],["ln",18,"Lily","MAYBE SHE HOLDS THE KEY, THAT LITTLE LADY...",1,[13],""],["ln",18,"Hannigan","TO GETTING’ MORE BUCKS",1,[15],""],["ln",18,"Rooster","INSTEAD OF LESS!\nMAYBE WE FIX THE GAME WITH SOMETHING SHADY...",1,[21],""],["ln",18,"Lily","WHERE DOES THAT PUT US?",1,[13],""],["ln",18,"Rooster","GIVE YOU ONE GUESS!",1,[21],""],["ln",18,"All Three","(spoken)  Yes!\nEASY STREET! EASY STREET!\nANNIE IS THE KEY,\nYES SIR-REE, YES SIR-REE, YES SIR-REE, YEAH!\nEASY STREET, EASY STREET!\nTHAT’S WHERE WE’RE GONNA BE!",1,[21,15,13],""],["dr",18,"(Lights up.)"],["sc",18,7,"Warbucks’ Mansion"],["dr",18,"(Lights up late morning, the following day. Warbucks is on the phone, while Grace is nearby taking notes.)"],["ln",19,"WARBUCKS","Yes… Yes, Mr. President… Listen, Franklin, why don’t we bury the hatchet and you come here with Mrs. Roosevelt for supper Christmas Eve? …You will? Wonderful… Goodbye, Mr. President. (disappointed, hanging up the phone) Grace, find out what Democrats eat.",0,[25],""],["ln",19,"GRACE","Yes, sir.",0,[10],""],["ln",19,"WARBUCKS","The package from Tiffany’s?",0,[25],""],["ln",19,"GRACE","Arrived this morning.",0,[10],""],["ln",19,"WARBUCKS","I’m going to give it to her and then tell her that I want to adopt her.",0,[25],""],["ln",19,"GRACE","She’s going to be the happiest little girl in the world.",0,[10],""],["dr",19,"(Annie enters.)"],["ln",19,"WARBUCKS","Annie, can we have a man-to-man talk?",0,[25],""],["ln",19,"ANNIE","You’re sending me back to the orphanage, right?",0,[2],""],["ln",19,"WARBUCKS","Of course, not! (pause) Annie, I’ve lately realized something: No matter how much money you’ve got, if you have no one to share your life with, if you’re alone, then you might as well be broke. (He takes the Tiffany package and hands it to her) I was in Tiffany’s yesterday and picked this up for you.",0,[25],""],["ln",19,"ANNIE","For me? Gee, thanks, Mr. Warbucks. (Annie opens up the package and looks at the necklace. She is clearly unhappy with it, but pretends to like it) Oh, gee.",0,[2],""],["ln",19,"WARBUCKS","Annie, what is it?",0,[25],""],["ln",19,"ANNIE","(touching her old locket) This locket, my mom and dad left it… when they left me at the orphanage. They’re coming back for me. I know I’m real lucky being here with you for Christmas. But… the one thing I want in all the world… is to find my mother and father.",0,[2],""],["dr",19,"(Annie begins crying and runs to Grace, who has entered at the sound of hysterics. Grace embraces Annie and attempts to comfort her while looking to Warbucks, who stands helpless, dazed, and totally unable to cope with a crying child. The servants enter as well.)"],["ln",19,"WARBUCKS","It’ll be all right… I’ll find them… I’ll find your parents for you.",0,[25],""],["ln",19,"GRACE","Shh, shh. Mr. Warbucks will find your mother and father.",0,[10],""],["ln",19,"MRS. PUGH","If he has to put everyone in his organization on the job.",0,[18],""],["ln",19,"MRS. GREER","If he has to pull every political string there is to pull.",0,[17],""],["ln",19,"ANNETTE","Up to and including the White House!",0,[1],""],["ln",20,"WARBUCKS","Annie, give me your locket. We’ll have the FBI trace it and find out who bought it.",0,[25],""],["ln",20,"ANNIE","(A beat, then, reluctantly) Okay. (she takes off her locket and hands it to Warbucks) And maybe they should have my note, too. (She pulls the note from her pocket and gives that to him as well.)",0,[2],""],["ln",20,"WARBUCKS","You watch, Annie, you may be meeting your mother and father within a couple of days.",0,[25],""],["ln",20,"ANNIE","Oh boy! I gotta write a letter to the kids about this! (Annie sits down and begins penning a letter.) And pretty soon, everyone’ll know I’m looking for my folks, ‘cause we’re gonna go on the radio and tell ‘em. So make sure you listen, okay?",0,[2],""],["dr",20,"(Lights out.)"],["sc",20,8,"Radio Show"],["dr",20,"(Lights up on an NBC Studio live radio program, “The Oxydent Hour of Smiles, starring Bert Healy”. There is a sound-effects table, with a SFX Operator cuing the audience. Bert Healy is at a microphone, reading from a script. There is a Sound Engineer standing with Annie and Grace off to the side, watching Warbucks and Healy. A Sound Engineer cues the SFX Operator, who raises the “Applause” sign to the audience. They cue Bert and also give Warbucks a script.)"],["ln",20,"BERT HEALY","Welcome to America’s favourite radio program, The Oxydent Hour of Smiles, starring your old softy, Bert Healy. And good evening, Oliver Warbucks! I understand that you have something to tell the folks at home about little Annie here.",0,[4],""],["ln",20,"WARBUCKS","(reading) Yes, Bert Healy, I am now conducting a coast-to-coast nationwide search for Annie’s parents and offering a certified check for fifty thousand dollars to any persons who can prove that they are Annie’s parents.",0,[25],""],["ln",20,"BERT HEALY","So, Annie’s parents, if you’re listenin’ in, write to Oliver Warbucks care of this station. Thank you, Oliver Warbucks.",0,[4],""],["ln",20,"WARBUCKS","Thank you, Bert Healy.",0,[25],""],["dr",20,"(Bert gets another cue by a Sound Engineer.)"],["ln",20,"BERT HEALY","Well, I see by the old clock on the wall that another of our Thursday-night get-togethers has gone by faster than you can say Oxydent. So for all the Hour of Smiles Family, this is Bert Healy saying...",0,[4],""],["sg",20,"You’re Never Fully Dressed Without a Smile","Bert Healy, Boylan Sisters"],["ln",20,"Bert Healy","HEY HOBO MAN, HEY DAPPER DAN\nYOU’VE BOTH GOT YOUR STYLE\nBUT BROTHER, YOU’RE NEVER FULLY DRESSED\nWITHOUT A SMILE!\nYOUR CLOTHES MAY BE BEAU BRUMELLY\nTHEY STAND OUT A MILE --\nBUT BROTHER, YOU’RE NEVER FULLY DRESSED\nWITHOUT A SMILE!",1,[4],""],["ln",21,"Bert Healy","WHO CARES WHAT THEY’RE WEARING\nON MAIN STREET OR SAVILLE ROW\nIT’S WHAT YOU WEAR FROM EAR TO EAR\nAND NOT FROM HEAD TO TOE (THAT MATTERS)",1,[4],""],["ln",21,"Bert Healy","SO SENATOR, SO JANITOR,\nSO LONG FOR AWHILE REMEMBER\nYOU’RE NEVER FULLY DRESSED WITHOUT A....",1,[4],""],["ln",21,"Boylan Sisters","READY OR NOT, HERE HE GOES\nLISTEN TO BERT TAP HIS SMILIN’ TOES",1,[],"BOY"],["dr",21,"(Sound Effects Operator taps shoes on block of wood)"],["ln",21,"BERT HEALY","(acting out of breath from dancing) Ah, the lovely Boylan sisters!",0,[4],""],["ln",21,"Boylan Sisters","DOO DOODLE-OO-DOO\nDOO DOODLE-OO-DOO\nDOO DOO DOO DOO\nDOO DOO DOO DOO",1,[],"BOY"],["ln",21,"Boylan Sisters","YOUR CLOTHES MAY BE BEAU BRUMELLY\nTHEY STAND OUT A MILE\nBUT BROTHER, YOU’RE NEVER FULLY DRESSED\nYOU’RE NEVER DRESSED WITHOUT AN\nS - M - I - L - E",1,[],"BOY"],["ln",21,"BERT HEALY","Smile, darn ya! (The Boylan Sisters hum as Bert addresses the audiences) Yes, this is your old softy, Mrs. Healy’s boy, Bert Healy, saying, “Until next week, same time, same station…” Goodnight.",0,[4],""],["ln",21,"Bert, Boylan Sisters","THAT MATTERS…",1,[4],"BOY"],["dr",21,"(Sound Effects Operator raises their “Applause” sign. Lights out.)"],["sc",21,9,"Miss Hannigan’s Office"],["dr",21,"(Lights up on the orphans surrounding Miss Hannigan’s radio in her office. They have been listening to The Oxydent Hour of Smiles radio show.)"],["ln",21,"DUFFY","Gee, Annie on the radio, coast-to-coast. She’s famous!",0,[8],""],["ln",22,"LIZZIE","I wonder if she’ll remember us.",0,[14],""],["ln",22,"EMILY","Annie would never forget us.",0,[9],""],["ln",22,"AUDREY","I want to be famous like Annie!",0,[3],""],["ln",22,"MOLLY","I wish I was on the radio!",0,[16],""],["ln",22,"PEPPER","Who wants to be on the dumb old radio?",0,[19],""],["sg",22,"You’re Never Fully Dressed Without a Smile","Orphans"],["ln",22,"TESSIE","I do! (imitating Bert Healy) So, for all the Hour of Smiles family, this is Bert Healy saying…",0,[24],""],["ln",22,"TESSIE","HEY, HOBO MAN,\nHEY, DAPPER DAN,\nYOU’VE BOTH GOT YOUR STYLE,",1,[24],""],["ln",22,"Orphans","BUT BROTHER, YOU’RE NEVER FULLY DRESSED WITHOUT A SMILE!",1,[],"ORP"],["ln",22,"Kate, Audrey","YOUR CLOTHES MAY BE BEAU BRUMELLY,\nTHEY STAND OUT A MILE,",1,[3,12],""],["ln",22,"Orphans","BUT BROTHER, YOU’RE NEVER FULLY DRESSED WITHOUT A SMILE!",1,[],"ORP"],["ln",22,"Pepper, Sarah","WHO CARES WHAT THEY’RE WEARING\nON MAIN STREET OR SAVILLE ROW?",1,[19,22],""],["ln",22,"July, Emily, Lizzie","IT’S WHAT YOU WEAR FROM EAR TO EAR,\nAND NOT FROM HEAD TO TOE,\nTHAT MATTERS.",1,[9,11,14],""],["ln",22,"TESSIE","Ah the lovely Boylan Sisters!",0,[24],""],["ln",22,"Molly, Duffy, Kate","DOO DOODLE-OO-DOO\nDOO DOODLE-OO-DOO\nDOO DOO DOO DOO\nDOO DOO DOO",1,[8,12,16],""],["ln",22,"Molly, Duffy, Kate","SO SENATOR, SO JANITOR,\nSO LONG FOR AWHILE!\nREMEMBER YOU’RE NEVER FULLY DRESSED WITHOUT A SMILE!",1,[8,12,16],""],["ln",22,"Orphans","WHO CARES WHAT THEY’RE WEARING\nON MAIN STREET OR SAVILLE ROW?\nIT’S WHAT YOU WEAR FROM EAR TO EAR,\nAND NOT FROM HEAD TO TOE,\nTHAT MATTERS.",1,[],"ORP"],["ln",23,"Orphans","(Dance Break!)",1,[],"ORP"],["ln",23,"Orphans","SO SENATOR, SO JANITOR,\nSO LONG FOR AWHILE!\nREMEMBER YOU’RE NEVER FULLY DRESSED,\nTHOUGH YOU MAY WEAR YOUR BEST,\nYOU’RE NEVER FULLY DRESSED WITHOUT A SMILE,\nSMILE,\nSMILE,\nSMILE, DARN YA, SMILE!",1,[],"ORP"],["dr",23,"(The orphans break out into a fit of giggles. Miss Hannigan enters.)"],["ln",23,"MISS HANNIGAN","Do I hear happiness in here? (They scramble offstage) A fifty-thousand dollar reward. Fifty thousand! What I couldn’t do with fifty thousand dollars.",0,[15],""],["dr",23,"(Rooster and Lily, in disguise as Ralph and Shirley Mudge, enter the orphanage hallway.)"],["ln",23,"ROOSTER","(humbly) Excuse us, ma’am. Are you the lady that runs this here orphanage?",0,[21],""],["ln",23,"MISS HANNIGAN","Yeah, whadya want?",0,[15],""],["ln",23,"ROOSTER","Well, we had terrible troubles back then and had to leave a baby here. On the front stoop.",0,[21],""],["ln",23,"LILY ST. REGIS","Our little girl. Our Annie.",0,[13],""],["ln",23,"MISS HANNIGAN","You’re Annie’s parents? I can’t believe it. Where’d you say you come from again?",0,[15],""],["ln",23,"ROOSTER","A little farm up in Canada where they’ve got lots of chickens and ducks and geese and roosters! (He crows and reveals his disguise. Lily also pulls hers off as well) Gotcha, sis!",0,[21],""],["ln",23,"MISS HANNIGAN","Rooster! I never woulda knowed it was you in a hundred years!",0,[15],""],["ln",23,"ROOSTER","Fooled ya, Aggie! And we’re gonna fool Warbucks, too.",0,[21],""],["ln",23,"LILY ST. REGIS","Get ourselves fifty thousand big ones.",0,[13],""],["ln",23,"ROOSTER","We need your help, sis, for more details about Annie that can help us pull this thing off.",0,[21],""],["ln",23,"MISS HANNIGAN","The kid’s the problem. What would we do with her afterward?",0,[15],""],["ln",23,"ROOSTER","No problem. (he opens a switchblade knife) When I want something to disappear, it disappears. (he makes the knife disappear) For good. We get the fifty grand, we blow this crummy town, and then Lil and me’ll meetcha…",0,[21],""],["ln",24,"MISS HANNIGAN","Where? …oh, yeah.",0,[15],""],["dr",24,"(They laugh evilly. Lights out.)"],["sc",24,10,"Warbucks’ Mansion – Christmas Eve"],["dr",24,"(Lights up on the Warbucks’ Mansion decorated for Christmas. Grace is looking at a clipboard, looking frazzled and exhausted. Warbucks and Annie enter.)"],["ln",24,"GRACE","I’ve spoken to more than a thousand people claiming to be your parents, but none of them knew about the locket. I’m so sorry.",0,[10],""],["ln",24,"DRAKE","(entering with an envelope) Mr. Warbucks, this has just come by special messenger from the FBI.",0,[7],""],["ln",24,"WARBUCKS","(taking the envelope) Ah, finally. (he opens it and reads it aloud) Agent Gunderson located the manufacturer of Annie’s locket. (becoming disappointed while reading) Over ninety thousand were made and sold.",0,[25],""],["dr",24,"(Warbucks takes the locket from the envelope and puts it back on Annie.)"],["ln",24,"ANNIE","That’s okay. You did your best. Anyway, I guess a kid can get along without folks. You didn’t turn out so bad.",0,[2],""],["ln",24,"WARBUCKS","Grace? Do you still have those legal papers I gave you the other day?",0,[25],""],["ln",24,"GRACE","Right here!",0,[10],""],["dr",24,"(She retrieves the papers, hands them to Warbucks, who takes them and crosses to Annie.)"],["ln",24,"WARBUCKS","Annie. I want to adopt you.",0,[25],""],["ln",24,"ANNIE","If I can’t have my real mother and father, there’s no one in the world I’d rather have for a father than you, Mr. Warbucks!",0,[2],""],["dr",24,"(They hug.)"],["ln",24,"WARBUCKS","Annie, this isn’t just going to be an adoption, it’s going to be a celebration! And you can have anyone in the world you want to come to it. Who would you like?",0,[25],""],["ln",24,"ANNIE","Well, I guess I’d like Miss Farrell. And well, everybody here. Oh, and the kids! And Miss Hannigan, too?",0,[2],""],["sg",24,"I Don’t Need Anything But You","Warbucks, Annie"],["ln",24,"WARBUCKS","(generously) Why not? Annie, I’m the luckiest man in the world!",0,[25],""],["ln",25,"ANNIE","And I’m the luckiest kid!",0,[2],""],["ln",25,"Both","TOGETHER AT LAST\nTOGETHER FOREVER\nWE’RE TYING A KNOT\nTHEY NEVER CAN SEVER",1,[25,2],""],["ln",25,"Warbucks","I DON’T NEED SUNSHINE NOW TO TURN MY SKIES TO BLUE",1,[25],""],["ln",25,"Both","I DON’T NEED ANYTHING BUT YOU!",1,[25,2],""],["ln",25,"Annie","YESTERDAY WAS PLAIN AWFUL",1,[2],""],["ln",25,"Warbucks","YOU CAN SAY THAT AGAIN",1,[25],""],["ln",25,"Annie","YESTERDAY WAS PLAIN AWFUL",1,[2],""],["ln",25,"Warbucks","BUT THAT’S",1,[25],""],["ln",25,"Annie","NOT NOW",1,[2],""],["ln",25,"Both","THAT’S THEN",1,[25,2],""],["ln",25,"Annie","I’M POOR AS A MOUSE",1,[2],""],["ln",25,"Warbucks","I’M RICHER THAN MIDAS",1,[25],""],["ln",25,"Both","BUT NOTHING ON EARTH\nCOULD EVER DIVIDE US\nAND IF TOMORROW I’M AN APPLE SELLER, TOO",1,[25,2],""],["ln",25,"Warbucks","I DON’T NEED ANYTHING –",1,[25],""],["ln",25,"Annie","ANYTHING –",1,[2],""],["ln",25,"Both","ANYTHING!\nI DON’T NEED ANYTHING BUT YOU!",1,[25,2],""],["dr",25,"(The staff enters during applause, looking spiffy, excited for the party. They congratulate Annie and Warbucks. A doorbell is heard. Drake exits and re-enters, looking sullen, with Rooster and Lily in their disguises as Ralph and Shirley Mudge.)"],["ln",25,"ROOSTER","(as Ralph) Excuse us, folks… Shirley, look. There’s our Annie.",0,[21],""],["ln",25,"LILY ST. REGIS","(as Shirley) Honey, we’re your mom and dad.",0,[13],""],["ln",25,"ROOSTER","Mudge is the name. Ralph Mudge. And this here is the wife, Shirley.",0,[21],""],["ln",26,"LILY ST. REGIS","And you're Annie Mudge.",0,[13],""],["ln",26,"GRACE","We’ve seen a great number of people who’ve –",0,[10],""],["ln",26,"ROOSTER","I expect you’ll be wantin’ proof of who we are. Here’s our driver’s licenses and Annie’s birth certificate.",0,[21],""],["dr",26,"(Rooster hands them to Grace, who takes them and reads. The staff surround her.)"],["ln",26,"GRACE","“Baby girl.”",0,[10],""],["ln",26,"MRS. PUGH","“Name: Ann Elizabeth Mudge.”",0,[18],""],["ln",26,"CECILLE","“Born to Ralph and Shirley Mudge.”",0,[6],""],["ln",26,"ANNETTE","“New York, New York.”",0,[1],""],["ln",26,"MRS. GREER","“October 28th, 1922.”",0,[17],""],["ln",26,"ANNIE","October 28th, that’s my birthday.",0,[2],""],["ln",26,"LILY ST. REGIS","Ralph, look! Annie’s wearin’ the locket!",0,[13],""],["ln",26,"ROOSTER","(to Warbucks and Grace as he takes out the locket) When we left Annie at the orphanage, we left half of a silver locket with her and kept the other half. (he fits it to Annie’s locket and then pockets it quickly) Yes, it fits perfectly.",0,[21],""],["ln",26,"LILY ST. REGIS","Oh, thank God, Ralph, she’s our Annie!",0,[13],""],["ln",26,"WARBUCKS","Mr. Mudge, what about the money?",0,[25],""],["ln",26,"ROOSTER","No, sir. Anyway, we don’t want no money.",0,[21],""],["ln",26,"LILY ST. REGIS","On the other hand, Ralph, remember that little pig farm out in New Jersey? With fifty thousand dollars, we could afford to bring Annie up right. In the country.",0,[13],""],["ln",26,"WARBUCKS","Would you mind if Annie stayed here until tomorrow morning, Christmas? Then you could come back to pick up Annie and the check.",0,[25],""],["ln",26,"ROOSTER","Until tomorrow morning, honey. And then you’ll be spendin’ the rest of your life with us. (As Rooster and Lily exit, Rooster bumps into Grace, just like previously) Oops! Pardon me, doll. Merry Christmas.",0,[21],""],["dr",26,"(Suspicious, Grace watches as Rooster and Lily exit. Everyone is deeply steeped in doom.)"],["ln",26,"WARBUCKS","Well… (trying to shift the mood) Drake. Champagne. (Drake begins passing out glasses) We must celebrate. Because we’ve just had the most wonderful news in the world. Annie has found her mother and father. I propose a toast. (all raise their glasses) To Annie Mudge.",0,[25],""],["ln",27,"ALL STAFF","To Annie Mudge.",0,[],"SRV"],["dr",27,"(Annie looks around and bolts upstairs.)"],["ln",27,"GRACE","(‘to Warbucks) Sir, I have the strangest feeling that I’ve seen that Mr. Mudge before, that he’s not who he says he is.",0,[10],""],["ln",27,"WARBUCKS","Then I won’t give her up ‘til we’re certain.",0,[25],""],["ln",27,"GRACE","But how…?",0,[10],""],["ln",27,"WARBUCKS","I’ll find a way! I’ll go straight to the top – to the President of the United States. Even if he is a Democrat!",0,[25],""],["dr",27,"(He crosses to the phone. The staff looks hopeful. Lights out.)"],["sc",27,11,"Warbucks’ Mansion – Christmas Morning"],["dr",27,"(Lights up on a dim foyer, the morning light bleeding in through the window. Annie enters from the top of the stairs, with a suitcase, and sits forlornly on the steps.)"],["sg",27,"Maybe (Second Reprise)","Annie"],["ln",27,"Annie","SILLY TO CRY, NOTHIN’ TO FEAR\nBETCHA WHERE THEY LIVE’S AS NICE AS RIGHT HERE\nBETCHA MY LIFE IS GONNA BE SWELL\nLOOKIN’ AT THEM, IT’S EASY TO TELL",1,[2],""],["ln",27,"Annie","AND MAYBE I’LL FORGET HOW NICE HE WAS TO ME\nAND HOW I WAS ALMOST HIS BABY\nMAYBE…",1,[2],""],["dr",27,"(Warbucks and Grace enter.)"],["ln",27,"GRACE","Merry Christmas, Annie.",0,[10],""],["ln",27,"WARBUCKS","Annie, did you know that President Roosevelt is here? (gesturing offstage) Mr. President.",0,[25],""],["dr",27,"(Roosevelt enters in his wheelchair, pushed by Louis Howe.)"],["ln",27,"ANNIE","Merry Christmas, President Roosevelt.",0,[2],""],["ln",27,"ROOSEVELT","Merry Christmas, Annie. Annie, early this morning, FBI Director Hoover telephoned me with some very sad news. He succeeded in tracing the identity of your parents.",0,[20],""],["ln",28,"ANNIE","Yes. Mr. and Mrs. Mudge.",0,[2],""],["ln",28,"ROOSEVELT","No, dear. David and Margaret Bennett. Annie, your mother and father passed away. A long time ago.",0,[20],""],["ln",28,"ANNIE","You mean… I’m really an orphan, after all?",0,[2],""],["ln",28,"WARBUCKS","Are you all right, Annie?",0,[25],""],["ln",28,"ANNIE","Yes. Because I know they loved me. And they would have come for me… if they weren’t…",0,[2],""],["ln",28,"WARBUCKS","I love you, Annie Bennett.",0,[25],""],["ln",28,"ANNIE","(hugging him) And I love you, too! (as she breaks away) Now, who the heck are Ralph and Shirley Mudge?",0,[2],""],["ln",28,"GRACE","The birth certificate could easily have been forged. But nobody knew about the locket except us.",0,[10],""],["ln",28,"ROOSEVELT","And the FBI, of course.",0,[20],""],["ln",28,"ANNIE","And Miss Hannigan.",0,[2],""],["ln",28,"WARBUCKS, GRACE, ROOSEVELT","(lightbulb) And Miss Hannigan!",0,[10,20,25],""],["ln",28,"DRAKE","(entering) Miss Hannigan, sir, and the children from the orphanage.",0,[7],""],["dr",28,"(Miss Hannigan enters as the children run inside to Annie. Grace makes a phone call.)"],["ln",28,"ORPHANS","(ad libbing) Hi Annie!",0,[],"ORP"],["ln",28,"WARBUCKS","Ah, Miss Hannigan. I’m delighted to meet you.",0,[25],""],["ln",28,"MISS HANNIGAN","Same here, I’d know you anywheres.",0,[15],""],["ln",28,"WARBUCKS","Miss Hannigan, let me introduce you to everyone. You know my secretary, Miss Farrell. And this is the President of the United States. And this is my butler, Drake.",0,[25],""],["dr",28,"(Miss Hannigan does a double take after being introduced to Roosevelt.)"],["ln",28,"ANNIE","Look, kids, there’s presents here for all of us!",0,[2],""],["dr",28,"(The orphans run to the Christmas tree to look at them all. We hear a doorbell. Drake exits. Louis Howe crosses to Warbucks with an envelope.)"],["ln",28,"LOUIS HOWE","Mr. Warbucks, this has just come from the FBI.",0,[5],""],["ln",28,"WARBUCKS","(opening the letter and reading to himself) Now it all fits together.",0,[25],""],["dr",29,"(Warbucks hands the letter to Grace, who reads it and shakes her head. Then Drake enters.)"],["ln",29,"DRAKE","Sir, Mr. and Mrs. Mudge.",0,[7],""],["dr",29,"(Rooster and Lily enter in their disguises as Ralph and Shirley Mudge.)"],["ln",29,"ROOSTER","(as Ralph) Good morning.",0,[21],""],["ln",29,"LILY ST. REGIS","(as Shirley) Merry Christmas, one and all.",0,[13],""],["ln",29,"WARBUCKS, GRACE","Merry Christmas.",0,[10,25],""],["ln",29,"ROOSTER","Well, we don’t want to bother you. On Christmas and all. We just come to pick up Annie – oh, and the check.",0,[21],""],["ln",29,"WARBUCKS","Ah, yes. Of course, the check. (Grace hands him the check and a pen, he writes in the “to” line) Here it is, Mr. Mudge. Fifty thousand dollars. Certified.",0,[25],""],["ln",29,"ROOSTER","(taking the check) Certified. (reading) “Pay to the order of… the jig is up”?!",0,[21],""],["ln",29,"WARBUCKS","Yes, the jig is up, Daniel Francis Hannigan. Also known as…",0,[25],""],["ln",29,"GRACE","(reading from the letter from the FBI) Rooster Hannigan. Also known as Ralph Mudge. Also known as Danny the Dip.",0,[10],""],["dr",29,"(Warbucks takes the check from Rooster and hands it back to Grace. Officer Ward enters, unseen.)"],["ln",29,"ROOSEVELT","Louis, turn them over.",0,[20],""],["ln",29,"LOUIS HOWE","Yes, sir.",0,[5],""],["dr",29,"(Louis Howe apprehends Rooster and Lily. Hannigan makes her way to the orphans to hide.)"],["ln",29,"GRACE","(indicating Hannigan) And I believe you’ll find this woman is their accomplice.",0,[10],""],["ln",29,"MISS HANNIGAN","(crossing to Annie) Annie. Annie. Tell ‘em how good and nice I always was to ya.",0,[15],""],["ln",29,"ANNIE","Gee, I’m sorry, Miss Hannigan, but remember the one thing you always taught me: never tell a lie.",0,[2],""],["ln",29,"MISS HANNIGAN","Brat!",0,[15],""],["dr",29,"(Officer Ward goes to apprehend Miss Hannigan, who tries to dodge him, but fails. Officer Ward and Louis Howe takes the trio offstage.)"],["ln",29,"ANNIE","Miss Hannigan is gone for good!",0,[2],""],["ln",30,"ORPHANS","Hooray!",0,[],"ORP"],["ln",30,"ROOSEVELT","And you won’t have to work anymore!",0,[20],""],["ln",30,"ORPHANS","Hooray!",0,[],"ORP"],["ln",30,"ROOSEVELT","Instead, you’ll have classrooms and teachers!",0,[20],""],["ln",30,"ORPHANS","Hoo – (groans)",0,[],"ORP"],["ln",30,"GRACE","But listen, girls, no more mush!",0,[10],""],["ln",30,"ORPHANS","Hooray!",0,[],"ORP"],["ln",30,"ROOSEVELT","Yes, girls, for you, and perhaps for all of us, this Christmas is going to be the beginning of a wonderful new life. A new deal! Hey, I rather like that: “A New Deal!”",0,[20],""],["ln",30,"WARBUCKS","So do I, Franklin. (he puts one arm around Annie and with the other, he gestures to the staff who brings in Sandy with a big gift bow) A new deal!",0,[25],""],["sg",30,"Tomorrow (Reprise)","Company"],["ln",30,"Annie, Warbucks","THE SUN’LL COME OUT TOMORROW\nBET YOUR BOTTOM DOLLAR THAT TOMORROW\nTHERE’LL BE SUN.",1,[2,25],""],["ln",30,"Roosevelt","JUST THINKING ABOUT TOMORROW\nCLEARS AWAY THE COBWEBS AND THE SORROW,\n‘TIL THERE’S NONE.",1,[20],""],["ln",30,"Solo","WHEN I’M STUCK WITH A DAY\nTHAT’S GRAY, AND LONELY,",1,[],""],["ln",30,"Solo","I JUST STICK OUT MY CHIN,\nAND GRIN, AND SAY, OH!",1,[],""],["ln",30,"Solo","THE SUN’LL COME OUT TOMORROW,\nSO YA GOTTA HANG ON ‘TIL TOMORROW,\nCOME WHAT MAY!",1,[],""],["ln",30,"Entire Cast","TOMORROW! TOMORROW!\nI LOVE YA, TOMORROW!\nYOU’RE ALWAYS A DAY AWAY.",1,[],"ALL"],["ln",30,"Entire Cast","TOMORROW! TOMORROW!\nI LOVE YA, TOMORROW!\nYOU’RE ALWAYS A DAY AWAY!",1,[],"ALL"]]};
+
+const MAIN_CAST_IDS = [22, 2, 16, 19, 13, 25, 10, 15, 21]; // Sarah, Annie, Molly, Pepper, Lily, Warbucks, Grace, Miss Hannigan, Rooster
+const SHORT_ROLE_LABELS = {
+  22: "Sarah",
+  2: "Annie",
+  16: "Molly",
+  19: "Pepper",
+  13: "Lily",
+  25: "Warbucks",
+  10: "Grace",
+  15: "Miss Hannigan",
+  21: "Rooster"
+};
+
+// ============================================================================
+// HYDRATE SCRIPT
+// ============================================================================
+function hydrateScript(raw) {
+  const cast = raw.cast.map(c => ({ id: c[0], label: c[1], roles: c[2], groups: c[3] }));
+  const orphanIds = cast.filter(c => c.groups.includes("ORPHANS")).map(c => c.id);
+  const servantIds = cast.filter(c => c.groups.includes("SERVANTS")).map(c => c.id);
+  const boylanIds = cast.filter(c => c.groups.includes("BOYLAN_SISTERS")).map(c => c.id);
+  const allIds = cast.map(c => c.id);
+  const molly = cast.find(c => c.roles.includes("Molly"));
+  const pepper = cast.find(c => c.roles.includes("Pepper"));
+
+  function decodeGroup(code) {
+    if (!code) return [];
+    if (Array.isArray(code)) return code;
+    if (code === "ALL") return allIds;
+    if (code === "ORP") return orphanIds;
+    if (code === "ORP_XM") return orphanIds.filter(id => !molly || id !== molly.id);
+    if (code === "ORP_XP") return orphanIds.filter(id => !pepper || id !== pepper.id);
+    if (code === "SRV") return servantIds;
+    if (code === "BOY") return boylanIds;
+    return [];
+  }
+
+  const scenes = [];
+  const items = [];
+  let curScene = null;
+  let curSongHeader = null;
+
+  raw.items.forEach((row, idx) => {
+    const kind = row[0];
+    const page = row[1];
+    if (kind === "sc") {
+      curScene = { id: `scene-${row[2]}`, number: row[2], title: row[3], page, startIndex: idx, endIndex: idx };
+      curSongHeader = null;
+      scenes.push(curScene);
+      items.push({ index: idx, type: "scene", page, sceneId: curScene.id, sceneNum: curScene.number, title: row[3] });
+    } else if (kind === "sg") {
+      curSongHeader = row[2];
+      items.push({ index: idx, type: "song", page, sceneId: curScene.id, title: row[2], performers: row[3] || "" });
+    } else if (kind === "dr") {
+      items.push({ index: idx, type: "direction", page, sceneId: curScene.id, text: row[2] });
+    } else if (kind === "ln") {
+      items.push({
+        index: idx,
+        type: "line",
+        page,
+        sceneId: curScene.id,
+        songHeader: curSongHeader,
+        speaker: row[2],
+        text: row[3],
+        isLyric: Boolean(row[4]),
+        directIds: row[5] || [],
+        groupIds: decodeGroup(row[6]),
+        songBlock: null
+      });
+    }
+    if (curScene) curScene.endIndex = idx;
+  });
+
+  // Compute exact contiguous song blocks (so skipping a song never skips spoken scenes in between)
+  const songBlocks = [];
+  let i = 0;
+  while (i < items.length) {
+    if (items[i].type === "line" && items[i].isLyric) {
+      const start = i;
+      const sceneId = items[i].sceneId;
+      const title = items[i].songHeader || "Song";
+      let end = i;
+      let j = i + 1;
+      while (j < items.length && items[j].sceneId === sceneId && items[j].type !== "song") {
+        if (items[j].type === "line" && items[j].isLyric) {
+          end = j;
+          j++;
+          continue;
+        }
+        // Bridge up to 3 brief spoken interjections inside a song (e.g. Molly in Hard-Knock Life)
+        let spokenCount = 0;
+        let hasMoreLyric = false;
+        for (let k = j; k < items.length; k++) {
+          if (items[k].sceneId !== sceneId || items[k].type === "song") break;
+          if (items[k].type === "line") {
+            if (items[k].isLyric) { hasMoreLyric = true; break; }
+            spokenCount++;
+            if (spokenCount > 3) break;
+          }
+        }
+        if (hasMoreLyric) j++;
+        else break;
+      }
+      // Include immediate trailing "(spoken) Welcome!" cue at end of a song
+      if (end + 1 < items.length && items[end + 1].type === "line" && /^[(]spoken[)]/i.test(items[end + 1].text)) {
+        end++;
+      }
+      const lineCount = items.slice(start, end + 1).filter(x => x.type === "line").length;
+      const block = { id: `songblock-${songBlocks.length + 1}`, title, startIndex: start, endIndex: end, lineCount };
+      songBlocks.push(block);
+      for (let m = start; m <= end; m++) {
+        if (items[m].type === "line") items[m].songBlock = block;
+      }
+      i = end + 1;
+    } else {
+      i++;
+    }
+  }
+
+  return { cast, scenes, songBlocks, items };
+}
+
+// ============================================================================
+// SMOOTH, HUMAN-LIKE VOICE ENGINE (STRICTLY AVOIDS ROBOTIC LEGACY VOICES)
+// ============================================================================
+const LEGACY_ROBOTIC_VOICES = [
+  "fred", "ralph", "albert", "kathy", "junior", "victoria", "agnes", "bruce",
+  "vicki", "princess", "grandma", "grandpa", "eddy", "flo", "reed", "rocko",
+  "sandy", "shelley", "bahh", "bells", "boing", "bubbles", "cellos", "deranged",
+  "good news", "bad news", "hysterical", "organ", "superstar", "trinoids",
+  "whisper", "wobble", "zarvox", "jester", "eloquence", "espeak"
+];
+
+const MALE_VOICE_NAMES = [
+  "guy", "ryan", "christopher", "andrew", "brian", "steffan", "eric", "roger",
+  "daniel", "nathan", "evan", "aaron", "arthur", "oliver", "tom", "alex",
+  "george", "david", "mark", "sean", "liam", "james", "richard", "google uk english male", "male"
+];
+
+const FEMALE_VOICE_NAMES = [
+  "aria", "jenny", "ava", "emma", "ana", "michelle", "sonia", "libby", "samantha",
+  "zoe", "serena", "karen", "moira", "tessa", "allison", "nicky", "martha",
+  "kate", "hazel", "clara", "natasha", "susan", "zira", "google us english", "google uk english female", "female"
+];
+
+// Keep pitch tightly around 1.0 (0.96–1.04) so neural voices stay warm, smooth, and un-distorted!
+const CHARACTER_PROFILES = {
+  "annie":              { gender: "female", accent: "en-US", pitch: 1.03, rate: 0.99, hints: ["ana online", "jenny online", "ava online", "zoe", "samantha", "google us english"] },
+  "molly":              { gender: "female", accent: "en-US", pitch: 1.04, rate: 0.98, hints: ["ana online", "emma online", "jenny online", "zoe", "samantha", "google us english"] },
+  "pepper":             { gender: "female", accent: "en-US", pitch: 1.00, rate: 1.02, hints: ["michelle online", "ava online", "aria online", "nicky", "samantha", "google us english"] },
+  "tessie":             { gender: "female", accent: "en-US", pitch: 1.03, rate: 1.03, hints: ["ana online", "jenny online", "emma online", "samantha", "google us english"] },
+  "july":               { gender: "female", accent: "en-US", pitch: 1.00, rate: 0.97, hints: ["ava online", "aria online", "allison", "samantha", "google us english"] },
+  "duffy":              { gender: "female", accent: "en-US", pitch: 0.99, rate: 0.98, hints: ["michelle online", "aria online", "ava", "samantha", "google us english"] },
+  "kate":               { gender: "female", accent: "en-US", pitch: 1.02, rate: 1.00, hints: ["jenny online", "ana online", "zoe", "samantha", "google us english"] },
+  "sarah":              { gender: "female", accent: "en-US", pitch: 1.02, rate: 0.98, hints: ["emma online", "aria online", "samantha", "google us english"] },
+  "lizzie":             { gender: "female", accent: "en-US", pitch: 1.01, rate: 0.97, hints: ["ava online", "jenny online", "samantha", "google us english"] },
+  "audrey":             { gender: "female", accent: "en-US", pitch: 1.02, rate: 1.00, hints: ["jenny online", "emma online", "samantha", "google us english"] },
+  "emily":              { gender: "female", accent: "en-US", pitch: 1.01, rate: 0.98, hints: ["aria online", "ava online", "samantha", "google us english"] },
+  "miss hannigan":      { gender: "female", accent: "en-US", pitch: 0.96, rate: 0.95, hints: ["michelle online", "ava online", "karen", "tessa", "allison", "samantha", "google us english"] },
+  "rooster hannigan":   { gender: "male",   accent: "en-US", pitch: 1.00, rate: 1.03, hints: ["andrew online", "guy online", "evan", "aaron", "alex", "google uk english male"] },
+  "lily st. regis":     { gender: "female", accent: "en-US", pitch: 1.04, rate: 1.01, hints: ["emma online", "jenny online", "zoe", "samantha", "google us english"] },
+  "warbucks":           { gender: "male",   accent: "en-US", pitch: 0.96, rate: 0.95, hints: ["christopher online", "brian online", "steffan online", "nathan", "alex", "daniel", "google uk english male"] },
+  "grace farrell":      { gender: "female", accent: "en-US", pitch: 1.00, rate: 0.96, hints: ["aria online", "ava online", "serena", "samantha", "google uk english female"] },
+  "drake":              { gender: "male",   accent: "en-GB", pitch: 0.98, rate: 0.94, hints: ["ryan online", "daniel", "arthur", "oliver", "google uk english male"] },
+  "annette":            { gender: "female", accent: "en-GB", pitch: 1.01, rate: 0.98, hints: ["sonia online", "libby online", "serena", "martha", "google uk english female"] },
+  "cecille":            { gender: "female", accent: "en-GB", pitch: 1.02, rate: 0.99, hints: ["libby online", "sonia online", "serena", "google uk english female"] },
+  "mrs. greer":         { gender: "female", accent: "en-GB", pitch: 0.98, rate: 0.96, hints: ["sonia online", "serena", "martha", "google uk english female"] },
+  "mrs. pugh":          { gender: "female", accent: "en-GB", pitch: 0.97, rate: 0.96, hints: ["sonia online", "martha", "serena", "google uk english female"] },
+  "president roosevelt":{ gender: "male",   accent: "en-US", pitch: 0.96, rate: 0.93, hints: ["brian online", "christopher online", "nathan", "alex", "daniel", "google uk english male"] },
+  "bert healy":         { gender: "male",   accent: "en-US", pitch: 1.00, rate: 1.02, hints: ["guy online", "andrew online", "evan", "aaron", "alex", "google uk english male"] },
+  "officer ward":       { gender: "male",   accent: "en-IE", pitch: 0.97, rate: 0.96, hints: ["steffan online", "christopher online", "daniel", "nathan", "alex", "google uk english male"] },
+  "bundles":            { gender: "male",   accent: "en-US", pitch: 1.00, rate: 1.02, hints: ["guy online", "andrew online", "evan", "aaron", "alex"] },
+  "apple seller":       { gender: "male",   accent: "en-US", pitch: 0.98, rate: 0.99, hints: ["steffan online", "guy online", "evan", "alex"] },
+  "dog catcher":        { gender: "male",   accent: "en-US", pitch: 0.96, rate: 0.97, hints: ["christopher online", "brian online", "nathan", "alex"] },
+  "angry new yorker":   { gender: "male",   accent: "en-US", pitch: 0.97, rate: 1.03, hints: ["steffan online", "christopher online", "alex"] },
+  "louis howe":         { gender: "male",   accent: "en-US", pitch: 0.99, rate: 1.00, hints: ["andrew online", "guy online", "evan", "alex"] },
+  "usher":              { gender: "male",   accent: "en-US", pitch: 1.00, rate: 0.99, hints: ["ryan online", "daniel", "andrew online", "aaron"] },
+  "star-to-be":         { gender: "female", accent: "en-US", pitch: 1.02, rate: 1.00, hints: ["aria online", "jenny online", "ava online", "samantha", "google us english"] },
+  "sandy":              { gender: "male",   accent: "en-US", pitch: 0.97, rate: 1.02, hints: ["guy online", "alex", "daniel"] },
+  "boylan sisters":     { gender: "female", accent: "en-US", pitch: 1.02, rate: 1.00, hints: ["jenny online", "aria online", "samantha", "google us english"] },
+  "orphans":            { gender: "female", accent: "en-US", pitch: 1.02, rate: 1.00, hints: ["ana online", "jenny online", "samantha", "google us english"] },
+  "servants":           { gender: "female", accent: "en-GB", pitch: 1.00, rate: 0.97, hints: ["sonia online", "libby online", "serena", "google uk english female"] }
+};
+
+const SPEAKER_ALIASES = {
+  "grace": "grace farrell", "rooster": "rooster hannigan", "hannigan": "miss hannigan",
+  "lily": "lily st. regis", "roosevelt": "president roosevelt", "all staff": "servants",
+  "entire cast": "orphans", "all": "orphans", "all except pepper": "orphans",
+  "orphans, ex molly": "orphans", "orphans, except molly": "orphans",
+  "both": "warbucks", "all three": "rooster hannigan", "bert": "bert healy"
+};
+
+let browserVoices = [];
+
+function loadVoices() {
+  if (!("speechSynthesis" in window)) return [];
+  try {
+    const all = window.speechSynthesis.getVoices() || [];
+    browserVoices = all.filter(v => (v.lang || "").toLowerCase().startsWith("en"));
+    if (!browserVoices.length) browserVoices = all;
+  } catch (e) { browserVoices = []; }
+  return browserVoices;
+}
+
+function voiceGender(v) {
+  const n = (v.name || "").toLowerCase();
+  if (MALE_VOICE_NAMES.some(t => n.includes(t))) return "male";
+  if (FEMALE_VOICE_NAMES.some(t => n.includes(t))) return "female";
+  return "unknown";
+}
+
+function resolveProfile(speakerRaw) {
+  const clean = (speakerRaw || "").trim().toLowerCase();
+  if (CHARACTER_PROFILES[clean]) return CHARACTER_PROFILES[clean];
+  if (SPEAKER_ALIASES[clean]) return CHARACTER_PROFILES[SPEAKER_ALIASES[clean]];
+  for (const part of clean.split(",").map(s => s.trim())) {
+    const mapped = SPEAKER_ALIASES[part] || part;
+    if (CHARACTER_PROFILES[mapped]) return CHARACTER_PROFILES[mapped];
+  }
+  return { gender: "female", accent: "en-US", pitch: 1.0, rate: 0.98, hints: [] };
+}
+
+function pickHumanVoice(profile) {
+  const voices = browserVoices.length ? browserVoices : loadVoices();
+  if (!voices.length) return null;
+
+  let best = null;
+  let bestScore = -1e9;
+  const wantAccent = (profile.accent || "en-US").toLowerCase();
+
+  for (const v of voices) {
+    const nameL = (v.name || "").toLowerCase();
+    const langL = (v.lang || "").toLowerCase().replace("_", "-");
+    let score = 0;
+
+    // Strictly blacklist legacy robotic voices
+    if (LEGACY_ROBOTIC_VOICES.some(r => nameL.includes(r))) score -= 500;
+
+    // Cloud/neural voices (localService === false) are dramatically smoother than compact local voices
+    if (v.localService === false) score += 70;
+    if (nameL.includes("online") && nameL.includes("natural")) score += 160;
+    else if (nameL.includes("premium") || nameL.includes("siri")) score += 140;
+    else if (nameL.includes("enhanced") || nameL.includes("neural")) score += 125;
+    else if (nameL.includes("google")) score += 115;
+    else if (nameL.includes("microsoft") && !nameL.includes("david") && !nameL.includes("mark") && !nameL.includes("zira")) score += 55;
+    else if (nameL.includes("david") || nameL.includes("mark") || nameL.includes("zira")) score -= 35;
+
+    // Character hint match
+    for (let i = 0; i < (profile.hints || []).length; i++) {
+      if (nameL.includes(profile.hints[i])) {
+        score += 36 - i * 3;
+        break;
+      }
+    }
+
+    // Accent match
+    if (langL === wantAccent) score += 22;
+    else if (wantAccent === "en-gb" && (langL.includes("gb") || nameL.includes("uk"))) score += 22;
+    else if (wantAccent === "en-ie" && (langL.includes("ie") || nameL.includes("irish"))) score += 20;
+    else if (langL.startsWith("en-us")) score += 8;
+
+    // Gender match
+    const g = voiceGender(v);
+    if (g === profile.gender) score += 28;
+    else if (g !== "unknown" && g !== profile.gender) score -= 30;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = v;
+    }
+  }
+  return best;
+}
+
+// Smooth dialect phonetics, punctuation, and ALL-CAPS lyrics so browser TTS flows smoothly without stumbling!
+const SMOOTH_TTS_PHRASES = [
+  [/\bshovin[’']/gi, "shoving"], [/\bgettin[’']/gi, "getting"], [/\bfightin[’']/gi, "fighting"],
+  [/\brunnin[’']/gi, "running"], [/\bcomin[’']/gi, "coming"], [/\bmornin[’']/gi, "morning"],
+  [/\bnothin[’']/gi, "nothing"], [/\bnuthin[’']/gi, "nothing"], [/\bholdin[’']/gi, "holding"],
+  [/\bsingin[’']/gi, "singing"], [/\bhavin[’']/gi, "having"], [/\blistenin[’']/gi, "listening"],
+  [/\bputtin[’']/gi, "putting"], [/\bcryin[’']/gi, "crying"], [/\bhowlin[’']/gi, "howling"],
+  [/\bfreezin[’']/gi, "freezing"], [/\blivin[’']/gi, "living"], [/\bdrivin[’']/gi, "driving"],
+  [/\bpourin[’']/gi, "pouring"], [/\bstraightin[’']/gi, "straightening"], [/\bsittin[’']/gi, "sitting"],
+  [/\bplayin[’']/gi, "playing"], [/\bpayin[’']/gi, "paying"], [/\bgivin[’']/gi, "giving"],
+  [/\bsmilin[’']/gi, "smiling"], [/\bkeepin[’']/gi, "keeping"], [/\bthinkin[’']/gi, "thinking"],
+  [/\bdoin[’']/gi, "doing"], [/\bpunkin[’']/gi, "pumpkin"], [/\boutta\b/gi, "out of"],
+  [/\binsida\b/gi, "inside of"], [/\bwhattaya\b/gi, "what are you"], [/\bwhadya\b/gi, "what do you"],
+  [/\bmeetcha\b/gi, "meet you"], [/\bwoulda\b/gi, "would have"], [/\bknowed\b/gi, "knew"],
+  [/\bbetcha\b/gi, "bet you"], [/\bgotta\b/gi, "got to"], [/\bwanna\b/gi, "want to"],
+  [/\bgonna\b/gi, "going to"], [/\bahh\b/gi, "ah"], [/\b[‘']bout\b/gi, "about"],
+  [/\b[‘']cause\b/gi, "because"], [/\b[‘']em\b/gi, "them"], [/\b[‘']til\b/gi, "until"],
+  [/\b[‘']stead\b/gi, "instead"], [/\bya\b/gi, "you"], [/\ba[’']dollars\b/gi, "of dollars"]
+];
+
+function prepareTextForNaturalSpeech(text) {
+  // Remove inline stage directions and join lines cleanly WITHOUT breaking hyphenated words!
+  let clean = text
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/([,.;:!?])\s*\n+/g, "$1 ")
+    .replace(/\n+/g, ", ")
+    .replace(/[“”"]/g, "")
+    .replace(/\s+[–—-]{1,2}\s+/g, ", ")
+    .replace(/[–—]|--/g, ", ")
+    .replace(/\.{2,}|…/g, ", ")
+    .replace(/,\s*,+/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Convert ALL-CAPS lyrics to natural sentence case
+  const letters = clean.replace(/[^A-Za-z]/g, "");
+  const uppers = (letters.match(/[A-Z]/g) || []).length;
+  if (letters.length >= 6 && uppers / letters.length > 0.72) {
+    clean = clean.toLowerCase()
+      .replace(/(^|[.!?]\s+)([a-z])/g, (_, a, b) => a + b.toUpperCase())
+      .replace(/\bi([’'][a-z]+)?\b/g, m => "I" + m.slice(1));
+  }
+
+  // Smooth tricky dialect spellings for natural human pronunciation
+  for (const [rx, rep] of SMOOTH_TTS_PHRASES) {
+    clean = clean.replace(rx, rep);
+  }
+
+  clean = clean
+    .replace(/\bn\.y\.c\./gi, "N Y C")
+    .replace(/\bfbi\b/gi, "F B I")
+    .replace(/\bs,\s*m,\s*i,\s*l,\s*e\b/gi, "S, M, I, L, E")
+    .replace(/,\s*([.!?])/g, "$1")
+    .replace(/^[,.\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clean;
+}
+
+// Split long multi-sentence lines into smooth natural chunks (prevents Chrome mid-line cutoffs)
+function splitSpeechChunks(text) {
+  if (text.length <= 150) return [text];
+  const sentences = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+  const chunks = [];
+  let buf = "";
+  for (const s of sentences) {
+    if (buf && (buf.length + s.length) > 155) {
+      chunks.push(buf.trim());
+      buf = s;
+    } else {
+      buf += s;
+    }
+  }
+  if (buf.trim()) chunks.push(buf.trim());
+  return chunks.length ? chunks : [text];
+}
+
+// Optional Studio AI Voices (OpenAI gpt-4o-mini-tts) with character acting direction & caching
+const AI_KEY_STORAGE = "annie_openai_tts_key_v1";
+const aiAudioCache = new Map();
+let activeAudioEl = null;
+
+function getAiCharacterConfig(speakerRaw) {
+  const k = (speakerRaw || "").trim().toLowerCase();
+  const mapped = SPEAKER_ALIASES[k] || k;
+  const map = {
+    "annie": { voice: "coral", inst: "Speak like a bright, plucky, optimistic 11-year-old girl from 1933 New York." },
+    "molly": { voice: "shimmer", inst: "Speak like a sweet, tiny 6-year-old girl with childlike wonder." },
+    "pepper": { voice: "coral", inst: "Speak like a tough, bossy, sassy older kid." },
+    "tessie": { voice: "shimmer", inst: "Speak like an anxious, dramatic young girl who worries easily." },
+    "miss hannigan": { voice: "sage", inst: "Speak like an exasperated, brassy, theatrical middle-aged woman running an orphanage." },
+    "grace farrell": { voice: "nova", inst: "Speak like a warm, poised, classy, articulate private secretary." },
+    "warbucks": { voice: "onyx", inst: "Speak like a booming, commanding, confident billionaire businessman with warmth underneath." },
+    "drake": { voice: "fable", inst: "Speak like a proper, dignified British butler." },
+    "rooster hannigan": { voice: "echo", inst: "Speak like a slick, fast-talking, charismatic 1930s New York con man." },
+    "lily st. regis": { voice: "shimmer", inst: "Speak like a bubbly, high-energy, ditzy 1930s flapper." },
+    "president roosevelt": { voice: "onyx", inst: "Speak like President Franklin D. Roosevelt: warm, distinguished, deliberate, and reassuring." },
+    "bert healy": { voice: "alloy", inst: "Speak like a smooth, upbeat, charismatic 1930s radio host." },
+    "officer ward": { voice: "echo", inst: "Speak like a gruff, kindhearted 1930s New York beat cop." }
+  };
+  if (map[mapped]) return map[mapped];
+  const prof = resolveProfile(speakerRaw);
+  if (prof.gender === "male") return { voice: prof.accent === "en-GB" ? "fable" : "echo", inst: "Speak naturally like a stage actor in a 1930s New York musical." };
+  return { voice: "nova", inst: "Speak naturally and expressively like a young stage actress in a 1930s New York musical." };
+}
+
+async function fetchAiAudioUrl(item) {
+  if (!state.openaiKey || !item) return null;
+  const key = `${item.index}:${item.speaker}`;
+  if (aiAudioCache.has(key)) return aiAudioCache.get(key);
+  const spoken = prepareTextForNaturalSpeech(item.text);
+  if (!spoken) return null;
+  const cfg = getAiCharacterConfig(item.speaker);
+  const promise = fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${state.openaiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini-tts",
+      voice: cfg.voice,
+      input: spoken,
+      instructions: cfg.inst,
+      response_format: "mp3"
+    })
+  }).then(async res => {
+    if (!res.ok) throw new Error("API " + res.status);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    aiAudioCache.set(key, url);
+    return url;
+  }).catch(() => {
+    aiAudioCache.delete(key);
+    return null;
+  });
+  aiAudioCache.set(key, promise);
+  return promise;
+}
+
+function prefetchNextAiCue(fromIdx) {
+  if (!state.openaiKey) return;
+  const nxt = findNextPlayable(fromIdx, 1);
+  if (nxt !== null) {
+    const it = state.script.items[nxt];
+    if (it && !isMyLine(it) && !it.songBlock) {
+      fetchAiAudioUrl(it);
+    }
+  }
+}
+
+// ============================================================================
+// FREE IN-BROWSER NEURAL AI VOICES (KOKORO-82M VIA WASM — NO API KEY NEEDED!)
+// ============================================================================
+const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
+
+const KOKORO_CAST_MAP = {
+  "annie":               { voice: "af_heart",    speed: 1.01 },
+  "molly":               { voice: "af_sky",      speed: 1.02 },
+  "pepper":              { voice: "af_kore",     speed: 1.03 },
+  "tessie":              { voice: "af_bella",    speed: 1.04 },
+  "july":                { voice: "af_sarah",    speed: 0.99 },
+  "duffy":               { voice: "af_aoede",    speed: 1.00 },
+  "kate":                { voice: "af_nova",     speed: 1.01 },
+  "sarah":               { voice: "af_heart",    speed: 1.00 },
+  "lizzie":              { voice: "af_bella",    speed: 1.00 },
+  "audrey":              { voice: "af_sarah",    speed: 1.01 },
+  "emily":               { voice: "af_aoede",    speed: 1.00 },
+  "miss hannigan":       { voice: "af_nicole",   speed: 0.97 },
+  "grace farrell":       { voice: "af_sarah",    speed: 0.98 },
+  "lily st. regis":      { voice: "af_bella",    speed: 1.03 },
+  "warbucks":            { voice: "am_michael",  speed: 0.96 },
+  "rooster hannigan":    { voice: "am_puck",     speed: 1.03 },
+  "drake":               { voice: "bm_george",   speed: 0.95 },
+  "annette":             { voice: "bf_emma",     speed: 0.99 },
+  "cecille":             { voice: "bf_isabella", speed: 1.00 },
+  "mrs. greer":          { voice: "bf_emma",     speed: 0.97 },
+  "mrs. pugh":           { voice: "bf_isabella", speed: 0.97 },
+  "president roosevelt": { voice: "am_fenrir",   speed: 0.94 },
+  "bert healy":          { voice: "am_michael",  speed: 1.03 },
+  "officer ward":        { voice: "am_fenrir",   speed: 0.98 },
+  "bundles":             { voice: "am_puck",     speed: 1.02 },
+  "apple seller":        { voice: "am_michael",  speed: 1.00 },
+  "dog catcher":         { voice: "am_fenrir",   speed: 0.98 },
+  "angry new yorker":    { voice: "am_onyx",     speed: 1.03 },
+  "louis howe":          { voice: "am_michael",  speed: 1.00 },
+  "usher":               { voice: "bm_george",   speed: 0.99 },
+  "star-to-be":          { voice: "af_heart",    speed: 1.01 },
+  "sandy":               { voice: "am_puck",     speed: 1.00 },
+  "boylan sisters":      { voice: "af_bella",    speed: 1.01 },
+  "orphans":             { voice: "af_bella",    speed: 1.01 },
+  "servants":            { voice: "bf_emma",     speed: 0.98 }
+};
+
+function getKokoroConfig(speakerRaw) {
+  const clean = (speakerRaw || "").trim().toLowerCase();
+  if (KOKORO_CAST_MAP[clean]) return KOKORO_CAST_MAP[clean];
+  if (SPEAKER_ALIASES[clean] && KOKORO_CAST_MAP[SPEAKER_ALIASES[clean]]) {
+    return KOKORO_CAST_MAP[SPEAKER_ALIASES[clean]];
+  }
+  for (const part of clean.split(",").map(s => s.trim())) {
+    const mapped = SPEAKER_ALIASES[part] || part;
+    if (KOKORO_CAST_MAP[mapped]) return KOKORO_CAST_MAP[mapped];
+  }
+  const prof = resolveProfile(speakerRaw);
+  if (prof.gender === "male") return { voice: prof.accent === "en-GB" ? "bm_george" : "am_michael", speed: 0.99 };
+  return { voice: prof.accent === "en-GB" ? "bf_emma" : "af_heart", speed: 1.0 };
+}
+
+function encodePcmToWavBlob(float32, sampleRate = 24000) {
+  const numSamples = float32.length;
+  const buf = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buf);
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + numSamples * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, numSamples * 2, true);
+  let off = 44;
+  for (let i = 0; i < numSamples; i++, off += 2) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+const KOKORO_WORKER_CODE = `
+let tts = null;
+async function loadKokoro() {
+  const urls = [
+    "https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm",
+    "https://esm.sh/kokoro-js@1.2.1"
+  ];
+  let lastErr = null;
+  for (const url of urls) {
+    try {
+      const mod = await import(url);
+      if (mod && mod.KokoroTTS) return mod.KokoroTTS;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("Could not load Kokoro library");
+}
+self.onmessage = async (ev) => {
+  const msg = ev.data || {};
+  if (msg.type === "init") {
+    try {
+      const KokoroTTS = await loadKokoro();
+      tts = await KokoroTTS.from_pretrained("${KOKORO_MODEL_ID}", {
+        dtype: "q8",
+        device: "wasm",
+        progress_callback: (p) => {
+          self.postMessage({ type: "progress", progress: p });
+        }
+      });
+      self.postMessage({ type: "ready" });
+    } catch (err) {
+      self.postMessage({ type: "error", message: String(err && err.message ? err.message : err) });
+    }
+  } else if (msg.type === "speak") {
+    const { id, text, voice, speed } = msg;
+    if (!tts) {
+      self.postMessage({ type: "audio_error", id, message: "Model not ready" });
+      return;
+    }
+    try {
+      const audio = await tts.generate(text, { voice: voice || "af_heart", speed: speed || 1.0 });
+      let blob = null;
+      if (audio && typeof audio.toBlob === "function") {
+        blob = audio.toBlob();
+      }
+      if (blob) {
+        self.postMessage({ type: "audio", id, blob });
+      } else if (audio && audio.audio && audio.sampling_rate) {
+        self.postMessage({ type: "audio_pcm", id, pcm: audio.audio, sampleRate: audio.sampling_rate });
+      } else {
+        self.postMessage({ type: "audio_error", id, message: "Empty audio output" });
+      }
+    } catch (err) {
+      self.postMessage({ type: "audio_error", id, message: String(err && err.message ? err.message : err) });
+    }
+  }
+};
+`;
+
+let kokoroWorker = null;
+let kokoroMainTts = null;
+let kokoroUseMainThread = false;
+let kokoroReqSeq = 0;
+const kokoroPending = new Map();       // reqId -> { resolve, reject }
+const kokoroAudioCache = new Map();    // cacheKey -> blobUrl
+const kokoroInFlight = new Map();      // cacheKey -> Promise<blobUrl | null>
+const kokoroQueue = [];                // { cacheKey, text, voice, speed, resolve }
+let kokoroBusy = false;
+const kokoroFileBytes = new Map();
+
+function handleKokoroProgress(p) {
+  if (!p) return;
+  if (p.file && typeof p.loaded === "number" && typeof p.total === "number" && p.total > 0) {
+    kokoroFileBytes.set(p.file, { loaded: p.loaded, total: p.total });
+    let loaded = 0, total = 0;
+    for (const [fname, info] of kokoroFileBytes.entries()) {
+      // Weight the main ONNX model heavily so tiny JSON files don't flash 100% early
+      if (fname.endsWith(".onnx") || info.total > 1000000) {
+        loaded += info.loaded;
+        total += info.total;
+      }
+    }
+    if (total > 0) {
+      const pct = Math.max(1, Math.min(99, Math.round((loaded / total) * 100)));
+      if (pct > state.kokoroProgress) {
+        state.kokoroProgress = pct;
+        renderKokoroBadge();
+      }
+    }
+  } else if (typeof p.progress === "number" && p.progress > 0 && p.file && p.file.endsWith(".onnx")) {
+    const pct = Math.max(1, Math.min(99, Math.round(p.progress)));
+    if (pct > state.kokoroProgress) {
+      state.kokoroProgress = pct;
+      renderKokoroBadge();
+    }
+  }
+}
+
+async function initKokoroMainThread() {
+  kokoroUseMainThread = true;
+  try {
+    const urls = [
+      "https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm",
+      "https://esm.sh/kokoro-js@1.2.1"
+    ];
+    let KokoroTTS = null;
+    for (const url of urls) {
+      try {
+        const mod = await import(url);
+        if (mod && mod.KokoroTTS) { KokoroTTS = mod.KokoroTTS; break; }
+      } catch (e) {}
+    }
+    if (!KokoroTTS) throw new Error("Could not load Kokoro voice module");
+    kokoroMainTts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
+      dtype: "q8",
+      device: "wasm",
+      progress_callback: handleKokoroProgress
+    });
+    state.kokoroStatus = "ready";
+    state.kokoroProgress = 100;
+    state.kokoroError = "";
+    renderKokoroBadge();
+    renderControls();
+    prefetchUpcomingKokoroCues(state.currentIndex);
+  } catch (err) {
+    state.kokoroStatus = "error";
+    state.kokoroError = String(err && err.message ? err.message : "Could not load neural voices");
+    renderKokoroBadge();
+  }
+}
+
+function initKokoroEngine() {
+  if (state.kokoroStatus === "loading" || state.kokoroStatus === "ready") return;
+  if (typeof window === "undefined" || typeof Blob === "undefined" || typeof URL === "undefined") return;
+
+  state.kokoroStatus = "loading";
+  state.kokoroProgress = 0;
+  state.kokoroError = "";
+  kokoroFileBytes.clear();
+  renderKokoroBadge();
+
+  // Prefer background Web Worker (smooth UI + mic meter); seamlessly fall back to main thread if blocked (e.g. file://)
+  if (typeof Worker !== "undefined") {
+    let sawWorkerLife = false;
+    try {
+      const workerBlob = new Blob([KOKORO_WORKER_CODE], { type: "application/javascript" });
+      const workerUrl = URL.createObjectURL(workerBlob);
+      const w = new Worker(workerUrl, { type: "module" });
+      kokoroWorker = w;
+
+      w.onmessage = (ev) => {
+        const msg = ev.data || {};
+        sawWorkerLife = true;
+        if (msg.type === "progress") {
+          handleKokoroProgress(msg.progress);
+        } else if (msg.type === "ready") {
+          state.kokoroStatus = "ready";
+          state.kokoroProgress = 100;
+          state.kokoroError = "";
+          renderKokoroBadge();
+          renderControls();
+          prefetchUpcomingKokoroCues(state.currentIndex);
+        } else if (msg.type === "error") {
+          try { w.terminate(); } catch (e) {}
+          kokoroWorker = null;
+          initKokoroMainThread();
+        } else if (msg.type === "audio" || msg.type === "audio_pcm") {
+          const pend = kokoroPending.get(msg.id);
+          if (pend) {
+            kokoroPending.delete(msg.id);
+            const blob = msg.type === "audio" ? msg.blob : encodePcmToWavBlob(msg.pcm, msg.sampleRate || 24000);
+            pend.resolve(URL.createObjectURL(blob));
+          }
+        } else if (msg.type === "audio_error") {
+          const pend = kokoroPending.get(msg.id);
+          if (pend) {
+            kokoroPending.delete(msg.id);
+            pend.resolve(null);
+          }
+        }
+      };
+
+      w.onerror = () => {
+        if (!sawWorkerLife) {
+          try { w.terminate(); } catch (e) {}
+          kokoroWorker = null;
+          initKokoroMainThread();
+        }
+      };
+
+      w.postMessage({ type: "init" });
+      return;
+    } catch (e) {
+      kokoroWorker = null;
+    }
+  }
+  initKokoroMainThread();
+}
+
+async function synthesizeKokoroOnce(text, voice, speed) {
+  if (state.kokoroStatus !== "ready") return null;
+  if (kokoroWorker && !kokoroUseMainThread) {
+    return new Promise((resolve) => {
+      const id = ++kokoroReqSeq;
+      const timeout = setTimeout(() => {
+        if (kokoroPending.has(id)) {
+          kokoroPending.delete(id);
+          resolve(null);
+        }
+      }, 25000);
+      kokoroPending.set(id, {
+        resolve: (url) => { clearTimeout(timeout); resolve(url); }
+      });
+      kokoroWorker.postMessage({ type: "speak", id, text, voice, speed });
+    });
+  }
+  if (kokoroMainTts) {
+    try {
+      const audio = await kokoroMainTts.generate(text, { voice: voice || "af_heart", speed: speed || 1.0 });
+      const blob = (audio && typeof audio.toBlob === "function")
+        ? audio.toBlob()
+        : (audio && audio.audio ? encodePcmToWavBlob(audio.audio, audio.sampling_rate || 24000) : null);
+      return blob ? URL.createObjectURL(blob) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function drainKokoroQueue() {
+  if (kokoroBusy) return;
+  kokoroBusy = true;
+  while (kokoroQueue.length > 0) {
+    const job = kokoroQueue.shift();
+    if (kokoroAudioCache.has(job.cacheKey)) {
+      job.resolve(kokoroAudioCache.get(job.cacheKey));
+      continue;
+    }
+    const url = await synthesizeKokoroOnce(job.text, job.voice, job.speed);
+    if (url) kokoroAudioCache.set(job.cacheKey, url);
+    kokoroInFlight.delete(job.cacheKey);
+    job.resolve(url);
+  }
+  kokoroBusy = false;
+}
+
+function requestKokoroChunkUrl(chunkText, speakerRaw, urgent = false) {
+  if (state.kokoroStatus !== "ready" || !chunkText) return Promise.resolve(null);
+  const cfg = getKokoroConfig(speakerRaw);
+  const cacheKey = `${cfg.voice}:${cfg.speed}:${chunkText}`;
+  if (kokoroAudioCache.has(cacheKey)) return Promise.resolve(kokoroAudioCache.get(cacheKey));
+  if (kokoroInFlight.has(cacheKey)) return kokoroInFlight.get(cacheKey);
+
+  const p = new Promise((resolve) => {
+    const job = { cacheKey, text: chunkText, voice: cfg.voice, speed: cfg.speed, resolve };
+    if (urgent) kokoroQueue.unshift(job);
+    else kokoroQueue.push(job);
+    drainKokoroQueue();
+  });
+  kokoroInFlight.set(cacheKey, p);
+  return p;
+}
+
+function prefetchUpcomingKokoroCues(fromIdx) {
+  if (state.kokoroStatus !== "ready" || state.openaiKey || !state.script) return;
+  let cursor = fromIdx;
+  let queued = 0;
+  for (let step = 0; step < 4 && queued < 2; step++) {
+    const nxt = findNextPlayable(cursor, 1);
+    if (nxt === null) break;
+    cursor = nxt;
+    const it = state.script.items[nxt];
+    if (!it || isMyLine(it) || it.songBlock) continue;
+    const spoken = prepareTextForNaturalSpeech(it.text);
+    if (!spoken) continue;
+    const chunks = splitSpeechChunks(spoken);
+    chunks.forEach(ch => requestKokoroChunkUrl(ch, it.speaker, false));
+    queued++;
+  }
+}
+
+// ============================================================================
+// STATE
+// ============================================================================
+const STORAGE_KEY = "annie_simple_rehearsal_v2";
+const state = {
+  script: null,
+  selectedCastId: 22, // Sarah default
+  currentIndex: 0,
+  hideMyLines: false,
+  revealedCurrent: false,
+  isRunning: false,
+  isSpeaking: false,
+  isGeneratingVoice: false,
+  waitingForMe: false,
+  songPromptBlock: null,        // non-null when paused at the start of a song offering Skip vs Practice
+  practicingSongBlockId: null,  // set when user explicitly chooses "Practice Song" for a block
+  openaiKey: "",
+  kokoroStatus: "idle",         // "idle" | "loading" | "ready" | "error"
+  kokoroProgress: 0,
+  kokoroError: "",
+  micActive: false,
+  micError: "",
+  heardTranscript: "",
+  matchRatio: 0,
+  liveProjectionPct: 0,         // live 0..100 stage projection meter while speaking
+  coachFeedback: null,          // { passed, pronunciationOk, projectionOk, expressionOk, tip, missedWords, acousticAvailable, attemptId }
+  justMatched: false
+};
+
+// ============================================================================
+// ROLE & SCRIPT HELPERS
+// ============================================================================
+function isMyLine(item) {
+  if (!item || item.type !== "line") return false;
+  return item.directIds.includes(state.selectedCastId) || item.groupIds.includes(state.selectedCastId);
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatDialogueHtml(text, isLyric) {
+  const lines = text.split("\n").map(line => {
+    return line.split(/(\([^)]*\))/g).map(tok => {
+      if (!tok) return "";
+      if (tok.startsWith("(") && tok.endsWith(")")) {
+        return `<span class="italic text-[var(--muted-foreground)] font-normal">${escapeHtml(tok)}</span>`;
+      }
+      return escapeHtml(tok);
+    }).join("");
+  });
+  return isLyric ? lines.map(l => `<div>${l}</div>`).join("") : lines.join("<br>");
+}
+
+function findNextPlayable(fromIdx, dir = 1) {
+  const items = state.script.items;
+  let i = fromIdx + dir;
+  while (i >= 0 && i < items.length) {
+    if (items[i].type === "line") return i;
+    i += dir;
+  }
+  return null;
+}
+
+// ============================================================================
+// DELIVERY COACH: PRONUNCIATION, PROJECTION & EXPRESSION (ANTI-MONOTONE)
+// ============================================================================
+const SPEECH_EQUIV = {
+  ya: "you", gonna: "going", wanna: "want", outta: "out", gotta: "got",
+  kinda: "kind", em: "them", til: "until", ruff: "rough", roof: "rough",
+  woof: "rough", maam: "mom", mama: "mom", mommy: "mom", aint: "not",
+  nuthin: "nothing", nothin: "nothing", insida: "inside", whadya: "what",
+  whattaya: "what", meetcha: "meet", knowed: "knew", punkin: "pumpkin",
+  warbucks: "starbucks", warbox: "starbucks", alright: "all", okay: "ok",
+  mr: "mister", mrs: "missus", ms: "miss", st: "saint", nyc: "new",
+  // Common English homophones Chrome ASR swaps freely
+  your: "youre", their: "there", theyre: "there", too: "to", two: "to",
+  four: "for", hear: "here", know: "no", write: "right", buy: "by",
+  bee: "be", sea: "see", won: "one", weight: "wait", wear: "where",
+  were: "where", sun: "son", hour: "our", are: "our", folks: "fox",
+  // Annie JR. proper names Chrome ASR frequently respells
+  hannigan: "hannigan", hanigan: "hannigan", hannagan: "hannigan", hannegan: "hannigan",
+  tessie: "tessie", tessa: "tessie", tessy: "tessie",
+  duffy: "duffy", daffy: "duffy",
+  molly: "molly", mally: "molly",
+  lily: "lily", lilly: "lily",
+  cecille: "cecille", cecile: "cecille", cecil: "cecille",
+  pugh: "pugh", pew: "pugh", hugh: "pugh",
+  bundles: "bundle", mudge: "much"
+};
+
+function expandContractions(text) {
+  return text.toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/\bcan't\b/g, "cannot")
+    .replace(/\bwon't\b/g, "will not")
+    .replace(/\bain't\b/g, "not")
+    .replace(/\bi'm\b/g, "i am")
+    .replace(/\bit's\b/g, "it is")
+    .replace(/\bthat's\b/g, "that is")
+    .replace(/\bwhat's\b/g, "what is")
+    .replace(/\bwho's\b/g, "who is")
+    .replace(/\bthere's\b/g, "there is")
+    .replace(/\bhere's\b/g, "here is")
+    .replace(/\bshe's\b/g, "she is")
+    .replace(/\bhe's\b/g, "he is")
+    .replace(/\blet's\b/g, "let us")
+    .replace(/\b([a-z]+)n't\b/g, "$1 not")
+    .replace(/\b([a-z]+)'re\b/g, "$1 are")
+    .replace(/\b([a-z]+)'ll\b/g, "$1 will")
+    .replace(/\b([a-z]+)'ve\b/g, "$1 have")
+    .replace(/\b([a-z]+)'d\b/g, "$1 would");
+}
+
+function normWords(text) {
+  const s = expandContractions(text.replace(/\([^)]*\)/g, " "))
+    .replace(/'/g, "").replace(/[-—–]/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return s ? s.split(" ") : [];
+}
+
+function displayWords(text) {
+  const s = text.replace(/\([^)]*\)/g, " ")
+    .replace(/[-—–]/g, " ")
+    .replace(/[^a-zA-Z0-9’'\s]/g, " ").replace(/\s+/g, " ").trim();
+  return s ? s.split(" ") : [];
+}
+
+function editDist(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  const dp = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) dp[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[b.length];
+}
+
+function wordMatches(tw, sw) {
+  if (tw === sw) return true;
+  if ((SPEECH_EQUIV[tw] || tw) === (SPEECH_EQUIV[sw] || sw)) return true;
+  // Dialect -in' / -ing pairs (e.g. "runnin" <-> "running") & simple plural/singular -s
+  if ((tw.endsWith("in") && (tw + "g") === sw) || (sw.endsWith("in") && tw === (sw + "g"))) return true;
+  if (tw.length >= 4 && (tw + "s" === sw || sw + "s" === tw)) return true;
+  // Allow 1-char ASR typo on 4+ letter words, 2-char typo on 7+ letter words (names/long words)
+  if (tw.length >= 4 && sw.length >= 4 && editDist(tw, sw) <= 1) return true;
+  if (tw.length >= 7 && sw.length >= 7 && editDist(tw, sw) <= 2) return true;
+  return false;
+}
+
+function evaluatePronunciation(targetText, spokenText, confidences = []) {
+  const tws = normWords(targetText);
+  const dws = displayWords(targetText);
+  const sws = normWords(spokenText);
+
+  const validConf = (confidences || []).filter(c => typeof c === "number" && c > 0);
+  const avgConfidence = validConf.length
+    ? validConf.reduce((a, b) => a + b, 0) / validConf.length
+    : null;
+
+  if (tws.length === 0) {
+    const ok = sws.length >= 1;
+    return {
+      ok,
+      ratio: sws.length ? 1 : 0,
+      matched: sws.length ? 1 : 0,
+      total: 0,
+      tailMatched: sws.length >= 1,
+      avgConfidence,
+      lowConfidence: false,
+      missedWords: []
+    };
+  }
+
+  const used = new Array(sws.length).fill(false);
+  const matchedTarget = new Array(tws.length).fill(false);
+  let matched = 0;
+  const missedWords = [];
+
+  for (let ti = 0; ti < tws.length; ti++) {
+    let found = false;
+    for (let si = 0; si < sws.length; si++) {
+      if (!used[si] && wordMatches(tws[ti], sws[si])) {
+        used[si] = true;
+        matchedTarget[ti] = true;
+        matched++;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      missedWords.push(dws[Math.min(ti, dws.length - 1)] || tws[ti]);
+    }
+  }
+
+  const ratio = matched / tws.length;
+  // Fair real-world ASR accuracy thresholds: catches skipped/mumbled words without punishing Chrome's quirks
+  const minRatio = tws.length === 1 ? 1.0 : tws.length <= 3 ? 0.65 : tws.length <= 6 ? 0.68 : 0.70;
+  // Require the speaker to reach the ending of the line (prevents mid-line early advancing!)
+  const tailWindow = tws.length <= 2 ? 1 : tws.length <= 7 ? 2 : 3;
+  let tailMatched = false;
+  for (let k = Math.max(0, tws.length - tailWindow); k < tws.length; k++) {
+    if (matchedTarget[k]) { tailMatched = true; break; }
+  }
+  const spokenEnough = sws.length >= Math.max(1, Math.floor(tws.length * 0.72));
+
+  const wordsOk = ratio >= minRatio && tailMatched && spokenEnough;
+  // Only flag low ASR confidence if genuinely garbled (< 0.52) AND word match wasn't already strong
+  const lowConfidence = avgConfidence !== null && avgConfidence < 0.52 && ratio < 0.80;
+  const ok = wordsOk && !lowConfidence;
+
+  return {
+    ok,
+    ratio,
+    matched,
+    total: tws.length,
+    tailMatched,
+    avgConfidence,
+    lowConfidence,
+    missedWords
+  };
+}
+
+// Compute RMS amplitude of an audio buffer in [-1, 1]
+function computeRms(floatBuf) {
+  if (!floatBuf || !floatBuf.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < floatBuf.length; i++) {
+    const x = floatBuf[i];
+    sum += x * x;
+  }
+  return Math.sqrt(sum / floatBuf.length);
+}
+
+// Normalized autocorrelation pitch estimator (85 Hz – 520 Hz, covers adult & child voices)
+// Returns fundamental frequency in Hz, or null when unvoiced / silent / noisy
+function estimatePitchHz(floatBuf, sampleRate) {
+  if (!floatBuf || floatBuf.length < 256 || !sampleRate) return null;
+  const n = floatBuf.length;
+
+  // Remove DC offset & check energy
+  let mean = 0;
+  for (let i = 0; i < n; i++) mean += floatBuf[i];
+  mean /= n;
+
+  let energy = 0;
+  for (let i = 0; i < n; i++) {
+    const v = floatBuf[i] - mean;
+    energy += v * v;
+  }
+  const rms = Math.sqrt(energy / n);
+  if (rms < 0.010) return null;
+
+  const minLag = Math.max(8, Math.floor(sampleRate / 520));
+  const maxLag = Math.min(Math.floor(n / 2), Math.ceil(sampleRate / 85));
+  if (maxLag <= minLag) return null;
+
+  const corrs = new Float32Array(maxLag + 1);
+  let maxCorr = 0;
+
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let num = 0;
+    let d1 = 0;
+    let d2 = 0;
+    const lim = n - lag;
+    for (let i = 0; i < lim; i++) {
+      const a = floatBuf[i] - mean;
+      const b = floatBuf[i + lag] - mean;
+      num += a * b;
+      d1 += a * a;
+      d2 += b * b;
+    }
+    const denom = Math.sqrt(d1 * d2);
+    const r = denom > 1e-9 ? num / denom : 0;
+    corrs[lag] = r;
+    if (r > maxCorr) maxCorr = r;
+  }
+
+  // Periodic voice clarity threshold calibrated for real rooms with natural reverb (still rejects noise!)
+  if (maxCorr < 0.56) return null;
+
+  // Pick the FIRST strong peak (>= 88% of global max) to prevent octave-halving errors
+  const peakFloor = Math.max(0.56, maxCorr * 0.88);
+  let bestLag = -1;
+  for (let lag = minLag + 1; lag < maxLag; lag++) {
+    if (corrs[lag] >= peakFloor && corrs[lag] >= corrs[lag - 1] && corrs[lag] >= corrs[lag + 1]) {
+      bestLag = lag;
+      break;
+    }
+  }
+  if (bestLag === -1) {
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      if (corrs[lag] === maxCorr) { bestLag = lag; break; }
+    }
+  }
+  if (bestLag <= 0) return null;
+
+  // Parabolic interpolation around bestLag for sub-sample frequency precision
+  let refinedLag = bestLag;
+  if (bestLag > minLag && bestLag < maxLag) {
+    const y0 = corrs[bestLag - 1];
+    const y1 = corrs[bestLag];
+    const y2 = corrs[bestLag + 1];
+    const denom = 2 * (2 * y1 - y0 - y2);
+    if (Math.abs(denom) > 1e-6) {
+      refinedLag = bestLag + (y2 - y0) / denom;
+    }
+  }
+
+  const hz = sampleRate / refinedLag;
+  return (hz >= 85 && hz <= 520) ? hz : null;
+}
+
+function percentileSorted(sorted, p) {
+  if (!sorted.length) return 0;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function medianFilter3(arr) {
+  if (arr.length < 3) return arr.slice();
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const a = arr[Math.max(0, i - 1)];
+    const b = arr[i];
+    const c = arr[Math.min(arr.length - 1, i + 1)];
+    const m = [a, b, c].sort((x, y) => x - y)[1];
+    out.push(m);
+  }
+  return out;
+}
+
+// Summarize collected RMS & pitch samples from a single spoken attempt
+function summarizeAcoustics(rmsSamples, pitchSemitones, ambientRms = 0.005) {
+  const safeAmbient = Math.max(0.002, Math.min(0.022, ambientRms || 0.005));
+  const voiceFloor = Math.max(0.011, safeAmbient * 2.0);
+  const voicedRms = (rmsSamples || []).filter(v => v >= voiceFloor);
+
+  if (!voicedRms.length) {
+    return {
+      available: true,
+      voicedFrames: 0,
+      peakRms: 0,
+      avgRms: 0,
+      rmsCv: 0,
+      emphasisRatio: 1,
+      pitchCount: 0,
+      pitchRange: 0,
+      pitchStd: 0,
+      ambientRms: safeAmbient
+    };
+  }
+
+  const sortedRms = voicedRms.slice().sort((a, b) => a - b);
+  const peakRms = sortedRms.length >= 6
+    ? percentileSorted(sortedRms, 0.92)
+    : sortedRms[sortedRms.length - 1];
+  const medianRms = percentileSorted(sortedRms, 0.5);
+  const avgRms = voicedRms.reduce((a, b) => a + b, 0) / voicedRms.length;
+  const rmsVar = voicedRms.reduce((a, v) => a + (v - avgRms) * (v - avgRms), 0) / voicedRms.length;
+  const rmsCv = avgRms > 1e-6 ? Math.sqrt(rmsVar) / avgRms : 0;
+  const emphasisRatio = medianRms > 1e-6 ? peakRms / medianRms : 1;
+
+  // Smooth pitch contour to remove isolated 1-frame octave glitches before measuring expression
+  const smoothedPitch = medianFilter3(pitchSemitones || []);
+  let pitchRange = 0;
+  let pitchStd = 0;
+  if (smoothedPitch.length >= 2) {
+    const sortedP = smoothedPitch.slice().sort((a, b) => a - b);
+    pitchRange = percentileSorted(sortedP, 0.90) - percentileSorted(sortedP, 0.10);
+    const meanP = smoothedPitch.reduce((a, b) => a + b, 0) / smoothedPitch.length;
+    const pVar = smoothedPitch.reduce((a, v) => a + (v - meanP) * (v - meanP), 0) / smoothedPitch.length;
+    pitchStd = Math.sqrt(pVar);
+  }
+
+  return {
+    available: true,
+    voicedFrames: voicedRms.length,
+    peakRms,
+    avgRms,
+    rmsCv,
+    emphasisRatio,
+    pitchCount: smoothedPitch.length,
+    pitchRange,
+    pitchStd,
+    ambientRms: safeAmbient
+  };
+}
+
+// Balanced 3-pillar delivery evaluation: Pronunciation + Stage Projection + Expression (Anti-Monotone)
+function evaluateDelivery(targetText, spokenText, confidences, acousticStats) {
+  const pron = evaluatePronunciation(targetText, spokenText, confidences);
+  const wordCount = pron.total;
+  const isShortLine = wordCount <= 3;
+
+  const acousticAvailable = Boolean(acousticStats && acousticStats.available);
+  let projectionOk = true;
+  let expressionOk = true;
+
+  if (acousticAvailable) {
+    const amb = acousticStats.ambientRms || 0.005;
+    // Calibrated for real laptop/tablet/phone mics at normal distance (blocks whispering, passes clear projection!)
+    const minPeak = Math.max(0.042, amb * 3.0);
+    const minAvg = Math.max(0.016, amb * 1.8);
+
+    projectionOk = acousticStats.voicedFrames >= 2
+      && acousticStats.peakRms >= minPeak
+      && acousticStats.avgRms >= minAvg;
+
+    if (isShortLine) {
+      // Short 1-3 word lines: pass with clear pitch inflection OR punchy vocal emphasis
+      if (acousticStats.pitchCount >= 3) {
+        expressionOk = acousticStats.pitchRange >= 1.5
+          || acousticStats.rmsCv >= 0.25
+          || acousticStats.emphasisRatio >= 1.45;
+      } else {
+        expressionOk = acousticStats.rmsCv >= 0.22 || acousticStats.emphasisRatio >= 1.40;
+      }
+    } else {
+      // Full sentences (4+ words): still rejects flat monotone, passes natural expressive delivery
+      const hasPitchInflection = acousticStats.pitchCount >= 3
+        && (acousticStats.pitchRange >= 2.0 || acousticStats.pitchStd >= 0.80);
+      const hasWordEmphasis = acousticStats.rmsCv >= 0.20
+        || acousticStats.emphasisRatio >= 1.38
+        || acousticStats.pitchRange >= 3.0;
+      expressionOk = hasPitchInflection && hasWordEmphasis;
+    }
+  }
+
+  const passed = pron.ok && projectionOk && expressionOk;
+
+  // Build specific, encouraging coaching tip for retry
+  let tip = "";
+  if (passed) {
+    tip = "Great delivery! Clear, projected, and expressive.";
+  } else {
+    const tips = [];
+    if (!pron.ok) {
+      if (!pron.tailMatched && pron.missedWords.length > 0) {
+        const sample = pron.missedWords.slice(0, 3).join(", ");
+        tips.push(`Finish the entire line clearly (missed: ${sample})`);
+      } else if (pron.missedWords.length > 0 && pron.ratio < (wordCount <= 3 ? 0.65 : 0.70)) {
+        const sample = pron.missedWords.slice(0, 3).join(", ");
+        tips.push(`Pronounce every word clearly (missed: ${sample})`);
+      } else if (pron.lowConfidence) {
+        tips.push("Enunciate more crisply — a few words sounded mumbled");
+      } else {
+        tips.push("Say the full line clearly");
+      }
+    }
+    if (!projectionOk) {
+      tips.push("Project louder — fill the room with your voice");
+    }
+    if (!expressionOk) {
+      tips.push("Avoid monotone — add feeling, pitch changes, and emphasize the key words");
+    }
+    tip = tips.join(" · ") + ".";
+  }
+
+  return {
+    passed,
+    pronunciationOk: pron.ok,
+    projectionOk,
+    expressionOk,
+    acousticAvailable,
+    ratio: pron.ratio,
+    avgConfidence: pron.avgConfidence,
+    missedWords: pron.missedWords,
+    tip
+  };
+}
+
+// ============================================================================
+// PERSISTENT MICROPHONE + WEB AUDIO SESSION (ASK ONCE, NEVER RE-PROMPT!)
+// ============================================================================
+let persistentRec = null;
+let persistentMediaStream = null;
+let audioCtx = null;
+let audioAnalyser = null;
+let audioTimeBuf = null;
+let acousticTimer = null;
+let ambientRms = 0.006;
+let attemptRmsSamples = [];
+let attemptPitchSemitones = [];
+let lastVoicedAt = 0;            // Timestamp of most recent live vocal sound (blocks mid-speech cutoff!)
+let latestAttemptText = "";
+let latestAttemptConfidences = [];
+let latestResultCount = 0;
+let attemptCounter = 0;
+
+let recIsRunning = false;
+let micGateOpen = false;         // ONLY true while waiting for her line (ignores TTS speaker audio!)
+let gateResultFloor = 0;         // Ignore recognition results collected before this attempt opened
+let turnTriggerLock = false;
+let silenceTimer = null;
+let gateDelayTimer = null;
+let runId = 0;
+let stepTimer = null;
+
+function ensureAudioAnalyser(stream) {
+  if (!stream || audioAnalyser) return;
+  const AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtxCtor) return;
+  try {
+    audioCtx = new AudioCtxCtor();
+    const src = audioCtx.createMediaStreamSource(stream);
+    audioAnalyser = audioCtx.createAnalyser();
+    audioAnalyser.fftSize = 2048;
+    audioAnalyser.smoothingTimeConstant = 0.2;
+    src.connect(audioAnalyser);
+    audioTimeBuf = new Float32Array(audioAnalyser.fftSize);
+  } catch (e) {
+    audioAnalyser = null;
+  }
+}
+
+function resumeAudioContext() {
+  if (audioCtx && audioCtx.state === "suspended") {
+    try { audioCtx.resume(); } catch (e) {}
+  }
+}
+
+function startAcousticSampling() {
+  stopAcousticSampling();
+  attemptRmsSamples = [];
+  attemptPitchSemitones = [];
+  lastVoicedAt = 0;
+  latestAttemptText = "";
+  latestAttemptConfidences = [];
+  state.liveProjectionPct = 0;
+
+  if (!audioAnalyser || !audioTimeBuf) return;
+  resumeAudioContext();
+
+  acousticTimer = setInterval(() => {
+    if (!micGateOpen || !audioAnalyser || !audioTimeBuf) return;
+    try {
+      audioAnalyser.getFloatTimeDomainData(audioTimeBuf);
+      const rms = computeRms(audioTimeBuf);
+
+      // Update live projection bar (scaled so target threshold 0.042 sits right at 60% of bar)
+      const pct = Math.min(100, Math.round((rms / 0.07) * 100));
+      state.liveProjectionPct = Math.round(state.liveProjectionPct * 0.45 + pct * 0.55);
+
+      const voiceFloor = Math.max(0.011, ambientRms * 2.0);
+      if (rms < voiceFloor * 0.7 && attemptRmsSamples.length === 0) {
+        // Gently track quiet room floor before she starts speaking
+        ambientRms = Math.max(0.002, Math.min(0.020, ambientRms * 0.9 + rms * 0.1));
+      }
+
+      if (rms >= voiceFloor) {
+        lastVoicedAt = Date.now();
+        attemptRmsSamples.push(rms);
+        const hz = estimatePitchHz(audioTimeBuf, audioCtx ? audioCtx.sampleRate : 44100);
+        if (hz !== null) {
+          attemptPitchSemitones.push(12 * Math.log2(hz / 100));
+        }
+      }
+      updateLiveMicDom();
+    } catch (e) {}
+  }, 50);
+}
+
+function stopAcousticSampling() {
+  if (acousticTimer) {
+    clearInterval(acousticTimer);
+    acousticTimer = null;
+  }
+}
+
+function judgeHerAttempt(cur, spokenText, confidences, deferCount = 0) {
+  if (!micGateOpen || turnTriggerLock || !state.isRunning) return;
+
+  // NEVER cut off while vocal sound is still being detected on the mic!
+  if (audioAnalyser && lastVoicedAt > 0 && (Date.now() - lastVoicedAt) < 750 && deferCount < 6) {
+    if (silenceTimer) clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+      judgeHerAttempt(
+        cur,
+        latestAttemptText || spokenText,
+        latestAttemptConfidences.length ? latestAttemptConfidences : confidences,
+        deferCount + 1
+      );
+    }, 450);
+    return;
+  }
+
+  const finalSpoken = latestAttemptText || spokenText;
+  const finalConf = latestAttemptConfidences.length ? latestAttemptConfidences : confidences;
+  const acousticStats = audioAnalyser
+    ? summarizeAcoustics(attemptRmsSamples, attemptPitchSemitones, ambientRms)
+    : { available: false };
+
+  const result = evaluateDelivery(cur.text, finalSpoken, finalConf, acousticStats);
+  result.attemptId = ++attemptCounter;
+  state.coachFeedback = result;
+
+  if (result.passed) {
+    completeHerTurn();
+    return;
+  }
+
+  // DID NOT PASS: Stay on this exact line, show coaching feedback, and listen immediately for next take!
+  gateResultFloor = latestResultCount;
+  attemptRmsSamples = [];
+  attemptPitchSemitones = [];
+  lastVoicedAt = 0;
+  latestAttemptText = "";
+  latestAttemptConfidences = [];
+  state.heardTranscript = "";
+  state.matchRatio = 0;
+  state.liveProjectionPct = 0;
+  renderStage();
+}
+
+async function ensurePersistentMic() {
+  const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Ctor) {
+    state.micError = "Voice listening needs Chrome or Edge. You can still tap Next or press Space.";
+    renderStage();
+    return;
+  }
+
+  // Acquire one persistent audio stream once (with autoGainControl: false so true projection & emphasis are measured!)
+  if (!persistentMediaStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      persistentMediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false
+        }
+      });
+    } catch (err) {
+      try {
+        persistentMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err2) {
+        // Fall through: SpeechRecognition may still work or report permission error cleanly
+      }
+    }
+  }
+
+  if (persistentMediaStream) {
+    ensureAudioAnalyser(persistentMediaStream);
+    resumeAudioContext();
+    if (micGateOpen && !acousticTimer) {
+      startAcousticSampling();
+    }
+  }
+
+  if (!persistentRec) {
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 3;
+
+    rec.onstart = () => {
+      recIsRunning = true;
+      gateResultFloor = 0;
+      latestResultCount = 0;
+      state.micActive = true;
+      state.micError = "";
+      renderStage();
+    };
+
+    rec.onresult = (ev) => {
+      latestResultCount = ev.results.length;
+      if (!micGateOpen || turnTriggerLock || !state.isRunning) {
+        // Track result index so old audio from TTS is ignored the moment the gate opens
+        gateResultFloor = ev.results.length;
+        return;
+      }
+
+      const cur = state.script.items[state.currentIndex];
+      if (!cur || !isMyLine(cur)) return;
+
+      const targetWords = normWords(cur.text);
+      let combined = "";
+      const confidences = [];
+      let allFinal = true;
+
+      for (let i = Math.max(gateResultFloor, 0); i < ev.results.length; i++) {
+        const resItem = ev.results[i];
+        if (!resItem || !resItem.length) continue;
+        // Pick the recognition alternative that best matches the script line (huge accuracy win on character names!)
+        let bestAlt = resItem[0];
+        let bestHits = -1;
+        for (let a = 0; a < resItem.length; a++) {
+          const cand = resItem[a];
+          if (!cand || !cand.transcript) continue;
+          const cws = normWords(cand.transcript);
+          let hits = 0;
+          for (const cw of cws) {
+            if (targetWords.some(tw => wordMatches(tw, cw))) hits++;
+          }
+          if (hits > bestHits) {
+            bestHits = hits;
+            bestAlt = cand;
+          }
+        }
+        if (bestAlt && bestAlt.transcript) {
+          combined += " " + bestAlt.transcript;
+          if (typeof bestAlt.confidence === "number" && bestAlt.confidence > 0) {
+            confidences.push(bestAlt.confidence);
+          }
+        }
+        if (!resItem.isFinal) allFinal = false;
+      }
+      combined = combined.trim();
+      if (!combined) return;
+
+      latestAttemptText = combined;
+      latestAttemptConfidences = confidences;
+      state.heardTranscript = combined.slice(-90);
+      const pron = evaluatePronunciation(cur.text, combined, confidences);
+      state.matchRatio = pron.ratio;
+      updateLiveMicDom();
+
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+
+      const spokenWords = normWords(combined).length;
+      if (spokenWords >= 1) {
+        // Wait generously so mid-sentence breaths or dramatic pauses NEVER cut her off early!
+        // Only use 1.05s timer after she has clearly reached the end of the line & Chrome finalized speech.
+        const waitMs = (pron.ok && pron.tailMatched && allFinal)
+          ? 1050
+          : (pron.tailMatched && pron.ratio >= 0.70 ? 1350 : 2200);
+        silenceTimer = setTimeout(() => {
+          judgeHerAttempt(cur, combined, confidences, 0);
+        }, waitMs);
+      }
+    };
+
+    rec.onerror = (ev) => {
+      const code = ev && ev.error ? ev.error : "";
+      if (code === "no-speech" || code === "aborted") return;
+      state.micActive = false;
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        state.micError = "Microphone blocked. Allow mic permission in your browser (or tap Next / Space to advance).";
+      } else {
+        state.micError = "Mic paused — tap Next or Space to advance.";
+      }
+      renderStage();
+    };
+
+    rec.onend = () => {
+      recIsRunning = false;
+      // Keep the SAME persistent instance alive while rehearsing (never re-instantiating!)
+      if (state.isRunning && !state.micError) {
+        setTimeout(() => {
+          if (state.isRunning && !recIsRunning && persistentRec) {
+            try { persistentRec.start(); } catch (e) {}
+          }
+        }, 150);
+      } else {
+        state.micActive = false;
+      }
+    };
+
+    persistentRec = rec;
+  }
+
+  if (!recIsRunning) {
+    try {
+      persistentRec.start();
+    } catch (e) {
+      // Already starting
+    }
+  }
+}
+
+function closeMicGate() {
+  micGateOpen = false;
+  stopAcousticSampling();
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  if (gateDelayTimer) { clearTimeout(gateDelayTimer); gateDelayTimer = null; }
+}
+
+function openMicGateForMyLine() {
+  closeMicGate();
+  turnTriggerLock = false;
+  state.heardTranscript = "";
+  state.matchRatio = 0;
+  state.liveProjectionPct = 0;
+  state.coachFeedback = null;
+  state.justMatched = false;
+
+  // Brief 300ms pause so residual speaker echo from the cue line finishes before listening
+  gateDelayTimer = setTimeout(() => {
+    if (!state.isRunning || !state.waitingForMe) return;
+    micGateOpen = true;
+    gateResultFloor = latestResultCount;
+    ensurePersistentMic();
+    startAcousticSampling();
+    updateLiveMicDom();
+  }, 300);
+}
+
+function completeHerTurn() {
+  turnTriggerLock = true;
+  closeMicGate();
+  state.justMatched = true;
+  state.matchRatio = 1;
+  renderStage();
+
+  const myRun = ++runId;
+  stepTimer = setTimeout(() => {
+    if (myRun !== runId || !state.isRunning) return;
+    state.justMatched = false;
+    state.coachFeedback = null;
+    const nxt = findNextPlayable(state.currentIndex, 1);
+    if (nxt !== null) {
+      state.currentIndex = nxt;
+      state.revealedCurrent = false;
+      saveState();
+      renderAll();
+      runLoop();
+    } else {
+      pauseRehearsal();
+    }
+  }, 680);
+}
+
+// ============================================================================
+// ALWAYS-ON READ-ALOUD LOOP
+// ============================================================================
+function cancelAudioTimers() {
+  runId++;
+  closeMicGate();
+  if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+  if (activeAudioEl) {
+    try { activeAudioEl.pause(); activeAudioEl.src = ""; } catch (e) {}
+    activeAudioEl = null;
+  }
+  if ("speechSynthesis" in window) {
+    try {
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+      }
+    } catch (e) {}
+  }
+  state.isSpeaking = false;
+  state.isGeneratingVoice = false;
+}
+
+function pauseRehearsal() {
+  cancelAudioTimers();
+  state.isRunning = false;
+  state.waitingForMe = false;
+  state.justMatched = false;
+  state.coachFeedback = null;
+  state.liveProjectionPct = 0;
+  state.songPromptBlock = null;
+  renderAll();
+}
+
+function startRehearsal() {
+  state.isRunning = true;
+  state.micError = "";
+  ensurePersistentMic(); // Request/activate persistent mic ONCE right on user click!
+
+  const cur = state.script.items[state.currentIndex];
+  // If starting on a song block and not already practicing it, offer to skip right away!
+  if (cur && cur.songBlock && state.practicingSongBlockId !== cur.songBlock.id) {
+    state.songPromptBlock = cur.songBlock;
+    renderAll();
+    return;
+  }
+  if (isMyLine(cur)) {
+    state.waitingForMe = true;
+    renderAll();
+    openMicGateForMyLine();
+    return;
+  }
+  renderAll();
+  runLoop();
+}
+
+function skipCurrentSong() {
+  const cur = state.script.items[state.currentIndex];
+  const block = state.songPromptBlock || (cur && cur.songBlock);
+  if (!block) return;
+  const wasRunning = state.isRunning;
+  state.songPromptBlock = null;
+  state.practicingSongBlockId = null;
+
+  const afterIdx = findNextPlayable(block.endIndex, 1);
+  if (afterIdx === null) {
+    pauseRehearsal();
+    return;
+  }
+  cancelAudioTimers();
+  state.currentIndex = afterIdx;
+  state.revealedCurrent = false;
+  state.waitingForMe = false;
+  state.justMatched = false;
+  state.coachFeedback = null;
+  state.liveProjectionPct = 0;
+  saveState();
+  renderAll();
+  if (wasRunning) {
+    runLoop();
+  }
+}
+
+function practiceCurrentSong() {
+  const cur = state.script.items[state.currentIndex];
+  const block = state.songPromptBlock || (cur && cur.songBlock);
+  if (!block) return;
+  state.practicingSongBlockId = block.id;
+  state.songPromptBlock = null;
+  renderAll();
+  if (state.isRunning) {
+    runLoop();
+  }
+}
+
+function runLoop() {
+  if (!state.isRunning) return;
+  const cur = state.script.items[state.currentIndex];
+  if (!cur) { pauseRehearsal(); return; }
+
+  // SONG DETECTION: Pause cleanly when entering a song and offer to skip it!
+  if (cur.songBlock && state.practicingSongBlockId !== cur.songBlock.id) {
+    cancelAudioTimers();
+    state.waitingForMe = false;
+    state.songPromptBlock = cur.songBlock;
+    renderAll();
+    return;
+  }
+  // Clear practicingSongBlockId once we exit that song
+  if (!cur.songBlock && state.practicingSongBlockId) {
+    state.practicingSongBlockId = null;
+  }
+
+  // STOP AT HER LINE & LISTEN!
+  if (isMyLine(cur)) {
+    cancelAudioTimers();
+    state.waitingForMe = true;
+    renderStage();
+    openMicGateForMyLine();
+    prefetchNextAiCue(state.currentIndex);
+    prefetchUpcomingKokoroCues(state.currentIndex);
+    return;
+  }
+
+  // READ OTHER CHARACTER ALOUD SMOOTHLY!
+  state.waitingForMe = false;
+  closeMicGate();
+  const myRun = ++runId;
+
+  const spoken = prepareTextForNaturalSpeech(cur.text);
+  const advanceAfter = (ms) => {
+    if (myRun !== runId || !state.isRunning) return;
+    stepTimer = setTimeout(() => {
+      if (myRun !== runId || !state.isRunning) return;
+      const nxt = findNextPlayable(state.currentIndex, 1);
+      if (nxt === null) { pauseRehearsal(); return; }
+      state.currentIndex = nxt;
+      state.revealedCurrent = false;
+      saveState();
+      renderAll();
+      runLoop();
+    }, ms);
+  };
+
+  if (!spoken) {
+    advanceAfter(400);
+    return;
+  }
+
+  const speakWithBrowserVoice = () => {
+    if (myRun !== runId || !state.isRunning) return;
+    state.isGeneratingVoice = false;
+    if (!("speechSynthesis" in window)) {
+      advanceAfter(450);
+      return;
+    }
+    try {
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+      }
+    } catch (e) {}
+
+    const profile = resolveProfile(cur.speaker);
+    const voice = pickHumanVoice(profile);
+    const chunks = splitSpeechChunks(spoken);
+
+    const speakChunkAt = (chunkIdx) => {
+      if (myRun !== runId || !state.isRunning) return;
+      if (chunkIdx >= chunks.length) {
+        state.isSpeaking = false;
+        advanceAfter(260);
+        return;
+      }
+
+      const utter = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+      if (voice) utter.voice = voice;
+      utter.lang = voice ? voice.lang : (profile.accent || "en-US");
+      // Keep pitch strictly 1.0 to avoid vocoder buzz on fallback browser voices
+      utter.pitch = 1.0;
+      utter.rate = profile.rate || 0.98;
+
+      utter.onstart = () => {
+        if (myRun !== runId) return;
+        state.isSpeaking = true;
+        renderStage();
+      };
+      utter.onend = () => {
+        if (myRun !== runId) return;
+        if (chunkIdx + 1 < chunks.length) {
+          stepTimer = setTimeout(() => speakChunkAt(chunkIdx + 1), 90);
+        } else {
+          state.isSpeaking = false;
+          advanceAfter(260);
+        }
+      };
+      utter.onerror = () => {
+        if (myRun !== runId) return;
+        state.isSpeaking = false;
+        advanceAfter(350);
+      };
+
+      try {
+        state.isSpeaking = true;
+        if (chunkIdx === 0) renderStage();
+        window.speechSynthesis.speak(utter);
+      } catch (e) {
+        state.isSpeaking = false;
+        advanceAfter(400);
+      }
+    };
+
+    speakChunkAt(0);
+  };
+
+  // Priority 1: Optional OpenAI API key if explicitly configured by user
+  if (state.openaiKey) {
+    state.isSpeaking = true;
+    renderStage();
+    prefetchNextAiCue(state.currentIndex);
+    fetchAiAudioUrl(cur).then(url => {
+      if (myRun !== runId || !state.isRunning) return;
+      if (!url) {
+        speakWithBrowserVoice();
+        return;
+      }
+      const audio = new Audio(url);
+      activeAudioEl = audio;
+      audio.onended = () => {
+        if (myRun !== runId) return;
+        activeAudioEl = null;
+        state.isSpeaking = false;
+        advanceAfter(240);
+      };
+      audio.onerror = () => {
+        if (myRun !== runId) return;
+        activeAudioEl = null;
+        speakWithBrowserVoice();
+      };
+      audio.play().catch(() => speakWithBrowserVoice());
+    });
+    return;
+  }
+
+  // Priority 2: Free In-Browser Kokoro-82M Neural AI Voices (human-like, cached & prefetched!)
+  if (state.kokoroStatus === "ready") {
+    const chunks = splitSpeechChunks(spoken);
+    const playKokoroChunk = (chunkIdx) => {
+      if (myRun !== runId || !state.isRunning) return;
+      if (chunkIdx >= chunks.length) {
+        state.isSpeaking = false;
+        state.isGeneratingVoice = false;
+        advanceAfter(220);
+        return;
+      }
+
+      // Check cache to avoid flashing "Preparing voice..." on instant cached playback
+      const cfg = getKokoroConfig(cur.speaker);
+      const cacheKey = `${cfg.voice}:${cfg.speed}:${chunks[chunkIdx]}`;
+      if (!kokoroAudioCache.has(cacheKey)) {
+        state.isGeneratingVoice = true;
+        state.isSpeaking = false;
+        renderStage();
+      }
+
+      // Queue remaining chunks of this line right away
+      for (let k = chunkIdx + 1; k < chunks.length; k++) {
+        requestKokoroChunkUrl(chunks[k], cur.speaker, false);
+      }
+
+      requestKokoroChunkUrl(chunks[chunkIdx], cur.speaker, true).then(url => {
+        if (myRun !== runId || !state.isRunning) return;
+        state.isGeneratingVoice = false;
+        if (!url) {
+          speakWithBrowserVoice();
+          return;
+        }
+        // While this chunk plays, warm up the next 2 script lines in the background!
+        if (chunkIdx === chunks.length - 1) {
+          prefetchUpcomingKokoroCues(state.currentIndex);
+        }
+        const audio = new Audio(url);
+        activeAudioEl = audio;
+        state.isSpeaking = true;
+        renderStage();
+        audio.onended = () => {
+          if (myRun !== runId) return;
+          activeAudioEl = null;
+          if (chunkIdx + 1 < chunks.length) {
+            stepTimer = setTimeout(() => playKokoroChunk(chunkIdx + 1), 65);
+          } else {
+            state.isSpeaking = false;
+            advanceAfter(220);
+          }
+        };
+        audio.onerror = () => {
+          if (myRun !== runId) return;
+          activeAudioEl = null;
+          speakWithBrowserVoice();
+        };
+        audio.play().catch(() => speakWithBrowserVoice());
+      });
+    };
+
+    playKokoroChunk(0);
+    return;
+  }
+
+  // Priority 3: Instant browser fallback while Kokoro finishes downloading its ~86 MB cache
+  speakWithBrowserVoice();
+}
+
+function jumpToLine(idx, resumeIfRunning = false) {
+  const wasRunning = state.isRunning;
+  cancelAudioTimers();
+  let target = Math.max(0, Math.min(idx, state.script.items.length - 1));
+  while (target < state.script.items.length - 1 && state.script.items[target].type !== "line") {
+    target++;
+  }
+  state.currentIndex = target;
+  state.revealedCurrent = false;
+  state.waitingForMe = false;
+  state.justMatched = false;
+  state.coachFeedback = null;
+  state.liveProjectionPct = 0;
+  state.songPromptBlock = null;
+  const cur = state.script.items[target];
+  if (!cur || !cur.songBlock || cur.songBlock.id !== state.practicingSongBlockId) {
+    state.practicingSongBlockId = null;
+  }
+  saveState();
+  renderAll();
+  if (resumeIfRunning && wasRunning) {
+    runLoop();
+  }
+}
+
+function stepNext() {
+  if (state.songPromptBlock) {
+    skipCurrentSong();
+    return;
+  }
+  const cur = state.script.items[state.currentIndex];
+  if (isMyLine(cur) && state.hideMyLines && !state.revealedCurrent && !state.isRunning) {
+    state.revealedCurrent = true;
+    renderStage();
+    return;
+  }
+  const nxt = findNextPlayable(state.currentIndex, 1);
+  if (nxt !== null) {
+    jumpToLine(nxt, true);
+  }
+}
+
+function stepBack() {
+  state.songPromptBlock = null;
+  const prev = findNextPlayable(state.currentIndex, -1);
+  if (prev !== null) {
+    jumpToLine(prev, false);
+  }
+}
+
+// ============================================================================
+// PERSISTENCE
+// ============================================================================
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      selectedCastId: state.selectedCastId,
+      currentIndex: state.currentIndex,
+      hideMyLines: state.hideMyLines
+    }));
+  } catch (e) {}
+}
+
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (MAIN_CAST_IDS.includes(p.selectedCastId)) state.selectedCastId = p.selectedCastId;
+      if (typeof p.currentIndex === "number" && p.currentIndex >= 0 && p.currentIndex < state.script.items.length) {
+        state.currentIndex = p.currentIndex;
+      }
+      if (typeof p.hideMyLines === "boolean") state.hideMyLines = p.hideMyLines;
+    }
+    state.openaiKey = localStorage.getItem(AI_KEY_STORAGE) || "";
+  } catch (e) {}
+}
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+function updateLiveMicDom() {
+  const projBar = document.getElementById("projBarFill");
+  const txt = document.getElementById("micHeardLine");
+  if (projBar) {
+    const pct = Math.min(100, Math.max(0, state.liveProjectionPct || 0));
+    projBar.style.width = `${pct}%`;
+    projBar.style.background = pct >= 60 ? "var(--success)" : "var(--primary)";
+  }
+  if (txt) {
+    txt.textContent = state.heardTranscript
+      ? `Heard: "${state.heardTranscript}"`
+      : (state.coachFeedback && !state.coachFeedback.passed
+          ? "Try again — speak clearly, project, and emphasize key words…"
+          : "Speak clearly, project your voice, and add expression…");
+  }
+}
+
+function renderKokoroBadge() {
+  const el = document.getElementById("kokoroStatusBadge");
+  if (!el) return;
+  if (state.openaiKey) {
+    el.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold pill-pass";
+    el.innerHTML = `<span>●</span><span>OpenAI AI Voices</span>`;
+    return;
+  }
+  if (state.kokoroStatus === "ready") {
+    el.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold pill-pass";
+    el.innerHTML = `<span>●</span><span>Human AI Voices</span>`;
+  } else if (state.kokoroStatus === "loading") {
+    el.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--background)] text-[11px] font-medium text-[var(--muted-foreground)]";
+    const pct = state.kokoroProgress > 0 ? ` ${state.kokoroProgress}%` : "…";
+    el.innerHTML = `<span class="wave-bars"><span></span><span></span><span></span></span><span>Loading AI voices${pct}</span>`;
+  } else if (state.kokoroStatus === "error") {
+    el.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border pill-warn text-[11px] font-medium";
+    el.innerHTML = `<span>Browser voices</span><button id="btnRetryKokoro" class="underline font-semibold ml-1" title="${escapeHtml(state.kokoroError || "Retry loading neural voices")}">Retry AI</button>`;
+  } else {
+    el.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--background)] text-[11px] font-medium text-[var(--muted-foreground)]";
+    el.innerHTML = `<span>Preparing AI voices…</span>`;
+  }
+}
+
+function renderAll() {
+  renderKokoroBadge();
+  renderControls();
+  renderStage();
+}
+
+function renderControls() {
+  const row = document.getElementById("characterRow");
+  row.innerHTML = MAIN_CAST_IDS.map(cid => {
+    const active = cid === state.selectedCastId;
+    return `
+      <button data-char="${cid}" class="btn-tap px-3 py-2 rounded-xl text-xs font-semibold border text-center ${
+        active
+          ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]"
+          : "bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:border-[var(--primary)]"
+      }">${escapeHtml(SHORT_ROLE_LABELS[cid])}</button>
+    `;
+  }).join("");
+
+  const cur = state.script.items[state.currentIndex];
+  const curScene = state.script.scenes.find(s => s.id === cur.sceneId) || state.script.scenes[0];
+  document.getElementById("pageIndicator").textContent = `p. ${cur.page}`;
+
+  // Scene selector
+  const scSel = document.getElementById("sceneSelect");
+  scSel.innerHTML = state.script.scenes.map(sc => {
+    let myCount = 0;
+    for (let i = sc.startIndex; i <= sc.endIndex; i++) {
+      if (isMyLine(state.script.items[i])) myCount++;
+    }
+    return `<option value="${sc.id}" ${sc.id === curScene.id ? "selected" : ""}>Scene ${sc.number}: ${escapeHtml(sc.title)}${myCount ? ` (${myCount})` : ""}</option>`;
+  }).join("");
+
+  // Play / Pause button
+  const playLbl = document.getElementById("playPauseLabel");
+  const playIcon = document.getElementById("playPauseIcon");
+  if (state.isRunning) {
+    playLbl.textContent = "Pause";
+    playIcon.innerHTML = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`;
+  } else {
+    playLbl.textContent = "Start Rehearsal";
+    playIcon.innerHTML = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>`;
+  }
+
+  // Optional AI voice footer status
+  const aiLink = document.getElementById("aiVoiceStatusLink");
+  if (aiLink) {
+    aiLink.textContent = state.openaiKey
+      ? "Voice engine: OpenAI Studio AI (configure)"
+      : (state.kokoroStatus === "ready"
+          ? "Voice engine: Free Kokoro Neural AI active (options)"
+          : "Voice settings (optional OpenAI key)");
+  }
+}
+
+function renderCoachPill(label, status) {
+  // status: "pass" | "warn" | "idle"
+  const cls = status === "pass" ? "pill-pass" : status === "warn" ? "pill-warn" : "pill-idle";
+  const icon = status === "pass" ? "✓" : status === "warn" ? "!" : "○";
+  return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cls}"><span>${icon}</span>${escapeHtml(label)}</span>`;
+}
+
+function renderStage() {
+  const items = state.script.items;
+  const cur = items[state.currentIndex];
+
+  // Previous cue line (same scene)
+  let prevLine = null;
+  for (let i = state.currentIndex - 1; i >= 0; i--) {
+    if (items[i].sceneId !== cur.sceneId) break;
+    if (items[i].type === "line") { prevLine = items[i]; break; }
+  }
+  const prevBox = document.getElementById("prevCueBox");
+  if (prevLine) {
+    prevBox.innerHTML = `
+      <div class="rounded-2xl px-4 py-3 bg-[var(--card)]/70 border border-[var(--border)] opacity-75">
+        <div class="text-xs font-bold uppercase tracking-wide text-[var(--muted-foreground)] mb-1">${escapeHtml(prevLine.speaker)}</div>
+        <div class="text-sm text-[var(--muted-foreground)] leading-relaxed">${formatDialogueHtml(prevLine.text, prevLine.isLyric)}</div>
+      </div>
+    `;
+  } else {
+    prevBox.innerHTML = "";
+  }
+
+  const card = document.getElementById("activeCard");
+
+  // SONG PROMPT CARD: Identify when a song starts and offer to skip it!
+  if (state.songPromptBlock) {
+    const blk = state.songPromptBlock;
+    let myLinesInSong = 0;
+    for (let i = blk.startIndex; i <= blk.endIndex; i++) {
+      if (isMyLine(items[i])) myLinesInSong++;
+    }
+    const nextAfter = findNextPlayable(blk.endIndex, 1);
+    const nextLabel = nextAfter !== null
+      ? `Next dialogue: ${items[nextAfter].speaker}`
+      : "End of script";
+
+    card.innerHTML = `
+      <div class="rounded-2xl p-6 bg-[var(--card)] border-2 border-[var(--primary)]/50 space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-1">
+            <div class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[var(--primary)]">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              Song Coming Up
+            </div>
+            <h2 class="text-xl font-bold tracking-tight">${escapeHtml(blk.title)}</h2>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              ${myLinesInSong > 0 ? `${SHORT_ROLE_LABELS[state.selectedCastId]} has ${myLinesInSong} sung ${myLinesInSong === 1 ? "part" : "parts"} here` : `${SHORT_ROLE_LABELS[state.selectedCastId]} does not sing in this song`} · ${escapeHtml(nextLabel)}
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5 pt-1">
+          <button id="btnSkipSong" class="btn-tap px-5 py-2.5 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 text-sm font-semibold">
+            Skip Song →
+          </button>
+          <button id="btnPracticeSong" class="btn-tap px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)] text-xs font-medium">
+            Practice Song Lines
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Inline song bar whenever currently sitting on any song line
+  const songBarHtml = cur.songBlock ? `
+    <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[var(--background)] border border-[var(--border)] text-xs">
+      <span class="font-medium text-[var(--foreground)] truncate">♪ Song: <strong>${escapeHtml(cur.songBlock.title)}</strong></span>
+      <button id="btnSkipSong" class="btn-tap shrink-0 px-2.5 py-1 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:text-[var(--primary)] font-semibold">
+        Skip Song →
+      </button>
+    </div>
+  ` : "";
+
+  const mine = isMyLine(cur);
+  if (mine) {
+    const isHidden = state.hideMyLines && !state.revealedCurrent;
+    let statusHtml = "";
+    if (state.justMatched) {
+      statusHtml = `
+        <div class="px-3.5 py-2.5 rounded-xl bg-[var(--background)] border border-[var(--success)] text-xs font-semibold text-[var(--success)] flex items-center justify-between gap-2">
+          <span>✓ Great delivery! Clear, projected &amp; expressive — moving on…</span>
+        </div>
+      `;
+    } else if (state.isRunning && state.micError) {
+      statusHtml = `
+        <div class="px-3.5 py-2 rounded-xl bg-[var(--background)] border border-[var(--warning)] text-xs text-[var(--foreground)]">
+          ${escapeHtml(state.micError)}
+        </div>
+      `;
+    } else if (state.isRunning) {
+      const fb = state.coachFeedback;
+      const isRetry = Boolean(fb && !fb.passed);
+      const pronState = fb ? (fb.pronunciationOk ? "pass" : "warn") : "idle";
+      const projState = fb ? (fb.projectionOk ? "pass" : "warn") : "idle";
+      const exprState = fb ? (fb.expressionOk ? "pass" : "warn") : "idle";
+      const pct = Math.min(100, Math.max(0, state.liveProjectionPct || 0));
+
+      statusHtml = `
+        <div class="px-3.5 py-3 rounded-xl bg-[var(--background)] border ${isRetry ? "border-[var(--warning)] coach-nudge" : "border-[var(--primary)]/40"} space-y-2 text-xs">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="inline-flex items-center gap-2 font-semibold ${isRetry ? "text-[var(--foreground)]" : "text-[var(--primary)]"}">
+              <span class="wave-bars"><span></span><span></span><span></span></span>
+              ${isRetry ? "Try that line again!" : "Listening for delivery…"}
+            </span>
+            <div class="flex flex-wrap items-center gap-1.5">
+              ${renderCoachPill("Pronunciation", pronState)}
+              ${renderCoachPill("Projection", projState)}
+              ${renderCoachPill("Expression", exprState)}
+            </div>
+          </div>
+          ${isRetry ? `
+            <div class="px-2.5 py-1.5 rounded-lg pill-warn border text-xs font-medium leading-snug">
+              ${escapeHtml(fb.tip)}
+            </div>
+          ` : ""}
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
+              <span>Stage Projection</span>
+              <span>Aim past the mark →</span>
+            </div>
+            <div class="relative h-2 w-full rounded-full bg-[var(--card)] overflow-hidden">
+              <div id="projBarFill" class="h-full transition-all duration-75 rounded-full" style="width: ${pct}%; background: ${pct >= 60 ? "var(--success)" : "var(--primary)"};"></div>
+              <div class="absolute top-0 bottom-0 w-0.5 bg-[var(--foreground)]/50" style="left: 60%;" title="Stage projection target"></div>
+            </div>
+          </div>
+          <div id="micHeardLine" class="text-[var(--muted-foreground)] truncate">${
+            state.heardTranscript
+              ? `Heard: "${escapeHtml(state.heardTranscript)}"`
+              : (isRetry
+                  ? "Try again — speak clearly, project, and emphasize key words…"
+                  : "Speak clearly, project your voice, and add expression…")
+          }</div>
+        </div>
+      `;
+    }
+
+    card.innerHTML = `
+      <div class="rounded-2xl p-5 sm:p-6 border-2 my-card-tint space-y-4">
+        ${songBarHtml}
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)]">Your Line</span>
+            <span class="text-sm font-bold uppercase tracking-wide">${escapeHtml(cur.speaker)}</span>
+          </div>
+          <button id="btnToggleHide" class="btn-tap px-2.5 py-1 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-medium">
+            ${state.hideMyLines ? "Show My Lines" : "Hide My Lines"}
+          </button>
+        </div>
+
+        ${statusHtml}
+
+        ${isHidden ? `
+          <div id="tapReveal" class="cursor-pointer rounded-xl border border-dashed border-[var(--primary)]/50 bg-[var(--background)]/70 p-6 text-center space-y-1">
+            <div class="text-sm font-semibold">Say your line out loud</div>
+            <div class="text-xs text-[var(--muted-foreground)]">Tap here if you need a peek</div>
+          </div>
+        ` : `
+          <div class="script-serif text-xl sm:text-2xl leading-relaxed text-[var(--foreground)]">${formatDialogueHtml(cur.text, cur.isLyric)}</div>
+        `}
+      </div>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="rounded-2xl p-5 sm:p-6 bg-[var(--card)] border border-[var(--border)] space-y-3">
+        ${songBarHtml}
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold uppercase tracking-wide">${escapeHtml(cur.speaker)}</span>
+            ${state.isGeneratingVoice ? `
+              <span class="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] font-medium">
+                Preparing voice…
+              </span>
+            ` : (state.isSpeaking ? `
+              <span class="inline-flex items-center gap-1.5 text-xs text-[var(--primary)] font-medium">
+                <span class="wave-bars"><span></span><span></span><span></span></span>
+                Speaking
+              </span>
+            ` : "")}
+          </div>
+        </div>
+        <div class="script-serif text-xl sm:text-2xl leading-relaxed text-[var(--foreground)]">${formatDialogueHtml(cur.text, cur.isLyric)}</div>
+      </div>
+    `;
+  }
+}
+
+// ============================================================================
+// EVENTS & INIT
+// ============================================================================
+function wireEvents() {
+  document.getElementById("characterRow").addEventListener("click", e => {
+    const btn = e.target.closest("[data-char]");
+    if (!btn) return;
+    pauseRehearsal();
+    state.selectedCastId = Number(btn.dataset.char);
+    state.practicingSongBlockId = null;
+    // Start right before this character's first line in the play
+    const firstIdx = state.script.items.findIndex(it => isMyLine(it));
+    if (firstIdx > 0) {
+      const prevLineIdx = findNextPlayable(firstIdx, -1);
+      state.currentIndex = (prevLineIdx !== null && state.script.items[prevLineIdx].sceneId === state.script.items[firstIdx].sceneId)
+        ? prevLineIdx : firstIdx;
+    } else {
+      state.currentIndex = findNextPlayable(-1, 1) || 0;
+    }
+    saveState();
+    renderAll();
+    prefetchUpcomingKokoroCues(state.currentIndex - 1);
+  });
+
+  document.getElementById("sceneSelect").addEventListener("change", e => {
+    const sc = state.script.scenes.find(s => s.id === e.target.value);
+    if (!sc) return;
+    jumpToLine(sc.startIndex, false);
+    prefetchUpcomingKokoroCues(sc.startIndex - 1);
+  });
+
+  document.getElementById("btnPlayPause").addEventListener("click", () => {
+    if (state.isRunning) pauseRehearsal();
+    else startRehearsal();
+  });
+
+  document.getElementById("btnNext").addEventListener("click", stepNext);
+  document.getElementById("btnBack").addEventListener("click", stepBack);
+
+  document.getElementById("btnToggleAiVoicePanel").addEventListener("click", () => {
+    const panel = document.getElementById("aiVoicePanel");
+    panel.classList.toggle("hidden");
+    const inp = document.getElementById("openaiKeyInput");
+    if (!panel.classList.contains("hidden") && inp) {
+      inp.value = state.openaiKey || "";
+    }
+  });
+  document.getElementById("btnSaveAiKey").addEventListener("click", () => {
+    const val = (document.getElementById("openaiKeyInput").value || "").trim();
+    state.openaiKey = val;
+    try { localStorage.setItem(AI_KEY_STORAGE, val); } catch (e) {}
+    const msg = document.getElementById("aiVoiceMsg");
+    msg.textContent = val ? "✓ Saved! OpenAI Studio AI voices active." : "Cleared — using free Kokoro Neural AI voices.";
+    msg.classList.remove("hidden");
+    renderKokoroBadge();
+    renderControls();
+  });
+  document.getElementById("btnClearAiKey").addEventListener("click", () => {
+    state.openaiKey = "";
+    document.getElementById("openaiKeyInput").value = "";
+    try { localStorage.removeItem(AI_KEY_STORAGE); } catch (e) {}
+    const msg = document.getElementById("aiVoiceMsg");
+    msg.textContent = "Cleared — using free Kokoro Neural AI voices.";
+    msg.classList.remove("hidden");
+    renderKokoroBadge();
+    renderControls();
+  });
+
+  document.addEventListener("click", e => {
+    if (e.target.closest("#btnRetryKokoro")) {
+      state.kokoroStatus = "idle";
+      initKokoroEngine();
+      return;
+    }
+    if (e.target.closest("#btnSkipSong")) {
+      skipCurrentSong();
+      return;
+    }
+    if (e.target.closest("#btnPracticeSong")) {
+      practiceCurrentSong();
+      return;
+    }
+    if (e.target.closest("#btnToggleHide")) {
+      state.hideMyLines = !state.hideMyLines;
+      state.revealedCurrent = false;
+      saveState();
+      renderStage();
+      return;
+    }
+    if (e.target.closest("#tapReveal")) {
+      state.revealedCurrent = true;
+      renderStage();
+    }
+  });
+
+  document.addEventListener("keydown", e => {
+    const tag = (e.target && e.target.tagName || "").toUpperCase();
+    if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
+    if (e.code === "Space") { e.preventDefault(); stepNext(); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); stepNext(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); stepBack(); }
+  });
+}
+
+function init() {
+  state.script = hydrateScript(BUILTIN_RAW);
+  loadSavedState();
+  // Ensure we always start on a playable line
+  if (!state.script.items[state.currentIndex] || state.script.items[state.currentIndex].type !== "line") {
+    state.currentIndex = findNextPlayable(state.currentIndex - 1, 1) || 0;
+  }
+  loadVoices();
+  if ("speechSynthesis" in window) {
+    try { window.speechSynthesis.addEventListener("voiceschanged", loadVoices); } catch (e) {}
+  }
+  wireEvents();
+  renderAll();
+
+  // Start loading the free in-browser Kokoro-82M neural voice model right away in the background!
+  setTimeout(() => {
+    if (!state.openaiKey) initKokoroEngine();
+  }, 250);
+}
+
+init();
+</script>
+</body>
+</html>
