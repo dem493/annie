@@ -122,9 +122,12 @@
         </div>
       </div>
 
-      <!-- Main Characters -->
+      <!-- Main Characters (tap one or more) -->
       <div class="space-y-1.5">
-        <div class="text-xs font-medium text-[var(--muted-foreground)]">Character</div>
+        <div class="flex items-center justify-between gap-2">
+          <div class="text-xs font-medium text-[var(--muted-foreground)]">Characters <span class="opacity-75">(tap one or more)</span></div>
+          <div id="selectedRolesSummary" class="text-[11px] font-semibold text-[var(--primary)] truncate"></div>
+        </div>
         <div id="characterRow" class="grid grid-cols-3 gap-2"></div>
       </div>
 
@@ -134,6 +137,8 @@
         <select id="sceneSelect" class="w-full px-3 py-2 text-xs rounded-xl bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"></select>
       </label>
     </section>
+
+    <audio id="sharedActorAudio" playsinline preload="auto" class="hidden"></audio>
 
     <!-- STAGE AREA -->
     <section class="space-y-3">
@@ -986,7 +991,7 @@ function prefetchUpcomingKokoroCues(fromIdx) {
 const STORAGE_KEY = "annie_simple_rehearsal_v2";
 const state = {
   script: null,
-  selectedCastId: 22, // Sarah default
+  selectedCastIds: [22], // Sarah default (supports multiple characters!)
   currentIndex: 0,
   hideMyLines: false,
   revealedCurrent: false,
@@ -1014,7 +1019,15 @@ const state = {
 // ============================================================================
 function isMyLine(item) {
   if (!item || item.type !== "line") return false;
-  return item.directIds.includes(state.selectedCastId) || item.groupIds.includes(state.selectedCastId);
+  return state.selectedCastIds.some(cid => item.directIds.includes(cid) || item.groupIds.includes(cid));
+}
+
+function formatSelectedRolesLabel() {
+  const names = state.selectedCastIds.map(id => SHORT_ROLE_LABELS[id]).filter(Boolean);
+  if (!names.length) return "Sarah";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
 }
 
 function escapeHtml(str) {
@@ -1563,11 +1576,137 @@ function stopAcousticSampling() {
   }
 }
 
+const IS_IOS = typeof navigator !== "undefined" && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+);
+
+const SILENT_WAV_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+let playbackAudioCtx = null;
+let activeBufferSource = null;
+let speechWatchdogTimer = null;
+
+function getSharedAudioEl() {
+  return document.getElementById("sharedActorAudio");
+}
+
+function unlockAudioForMobile() {
+  // 1. Unlock a persistent Web Audio context on the user's tap (plays reliably across turns on iOS Safari!)
+  const AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
+  if (AudioCtxCtor) {
+    try {
+      if (!playbackAudioCtx) playbackAudioCtx = new AudioCtxCtor();
+      if (playbackAudioCtx.state === "suspended") playbackAudioCtx.resume();
+      const buf = playbackAudioCtx.createBuffer(1, 1, 22050);
+      const src = playbackAudioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(playbackAudioCtx.destination);
+      src.start(0);
+    } catch (e) {}
+  }
+
+  // 2. Unlock the single persistent <audio playsinline> element on user tap
+  const el = getSharedAudioEl();
+  if (el && !el.dataset.unlocked) {
+    try {
+      el.dataset.unlocked = "1";
+      el.src = SILENT_WAV_URI;
+      const p = el.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (e) {}
+  }
+
+  // 3. Resume speechSynthesis on user tap so iOS Safari never stays paused
+  if ("speechSynthesis" in window) {
+    try { window.speechSynthesis.resume(); } catch (e) {}
+  }
+}
+
+function stopActivePlayback() {
+  if (speechWatchdogTimer) { clearTimeout(speechWatchdogTimer); speechWatchdogTimer = null; }
+  if (activeBufferSource) {
+    try { activeBufferSource.onended = null; activeBufferSource.stop(); } catch (e) {}
+    activeBufferSource = null;
+  }
+  const el = getSharedAudioEl();
+  if (el) {
+    try { el.onended = null; el.onerror = null; el.pause(); } catch (e) {}
+  }
+  if (activeAudioEl && activeAudioEl !== el) {
+    try { activeAudioEl.onended = null; activeAudioEl.onerror = null; activeAudioEl.pause(); activeAudioEl.src = ""; } catch (e) {}
+  }
+  activeAudioEl = null;
+}
+
+// Play any audio URL (Kokoro WAV blob or OpenAI MP3 blob) reliably on iOS Safari, Android, & Desktop!
+function playAudioUrlUnlocked(url, myRun, onDone, onFail) {
+  stopActivePlayback();
+  if (myRun !== runId || !state.isRunning) return;
+
+  const playViaSharedElement = () => {
+    if (myRun !== runId || !state.isRunning) return;
+    const audio = getSharedAudioEl() || new Audio();
+    activeAudioEl = audio;
+    audio.onended = () => {
+      if (myRun !== runId) return;
+      activeAudioEl = null;
+      onDone();
+    };
+    audio.onerror = () => {
+      if (myRun !== runId) return;
+      activeAudioEl = null;
+      onFail();
+    };
+    try {
+      audio.src = url;
+      audio.currentTime = 0;
+      const p = audio.play();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {
+          if (myRun !== runId) return;
+          activeAudioEl = null;
+          onFail();
+        });
+      }
+    } catch (e) {
+      activeAudioEl = null;
+      onFail();
+    }
+  };
+
+  // Prefer unlocked Web Audio AudioBufferSourceNode — never blocked by iOS Safari autoplay timers!
+  if (playbackAudioCtx && typeof fetch === "function") {
+    try {
+      if (playbackAudioCtx.state === "suspended") playbackAudioCtx.resume();
+    } catch (e) {}
+    fetch(url)
+      .then(r => r.arrayBuffer())
+      .then(ab => playbackAudioCtx.decodeAudioData(ab))
+      .then(decoded => {
+        if (myRun !== runId || !state.isRunning) return;
+        const src = playbackAudioCtx.createBufferSource();
+        src.buffer = decoded;
+        src.connect(playbackAudioCtx.destination);
+        activeBufferSource = src;
+        src.onended = () => {
+          if (myRun !== runId) return;
+          if (activeBufferSource === src) activeBufferSource = null;
+          onDone();
+        };
+        src.start(0);
+      })
+      .catch(() => playViaSharedElement());
+    return;
+  }
+
+  playViaSharedElement();
+}
+
 function judgeHerAttempt(cur, spokenText, confidences, deferCount = 0) {
   if (!micGateOpen || turnTriggerLock || !state.isRunning) return;
 
-  // NEVER cut off while vocal sound is still being detected on the mic!
-  if (audioAnalyser && lastVoicedAt > 0 && (Date.now() - lastVoicedAt) < 750 && deferCount < 6) {
+  // NEVER cut off while vocal sound is still being detected on the mic! (snappy 380ms silence window)
+  if (audioAnalyser && lastVoicedAt > 0 && (Date.now() - lastVoicedAt) < 380 && deferCount < 6) {
     if (silenceTimer) clearTimeout(silenceTimer);
     silenceTimer = setTimeout(() => {
       judgeHerAttempt(
@@ -1576,7 +1715,7 @@ function judgeHerAttempt(cur, spokenText, confidences, deferCount = 0) {
         latestAttemptConfidences.length ? latestAttemptConfidences : confidences,
         deferCount + 1
       );
-    }, 450);
+    }, 220);
     return;
   }
 
@@ -1611,13 +1750,14 @@ function judgeHerAttempt(cur, spokenText, confidences, deferCount = 0) {
 async function ensurePersistentMic() {
   const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Ctor) {
-    state.micError = "Voice listening needs Chrome or Edge. You can still tap Next or press Space.";
+    state.micError = "Voice listening needs Chrome, Edge, or Safari. You can still tap Next or press Space.";
     renderStage();
     return;
   }
 
-  // Acquire one persistent audio stream once (with autoGainControl: false so true projection & emphasis are measured!)
-  if (!persistentMediaStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  // On Desktop & Android: acquire one persistent audio stream for Projection & Expression coaching.
+  // On iPhone/iPad (iOS Safari): skip getUserMedia so iOS never locks audio into quiet earpiece mode or conflicts with SpeechRecognition!
+  if (!IS_IOS && !persistentMediaStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     try {
       persistentMediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1635,7 +1775,7 @@ async function ensurePersistentMic() {
     }
   }
 
-  if (persistentMediaStream) {
+  if (persistentMediaStream && !IS_IOS) {
     ensureAudioAnalyser(persistentMediaStream);
     resumeAudioContext();
     if (micGateOpen && !acousticTimer) {
@@ -1646,7 +1786,7 @@ async function ensurePersistentMic() {
   if (!persistentRec) {
     const rec = new Ctor();
     rec.lang = "en-US";
-    rec.continuous = true;
+    rec.continuous = !IS_IOS;
     rec.interimResults = true;
     rec.maxAlternatives = 3;
 
@@ -1716,11 +1856,11 @@ async function ensurePersistentMic() {
 
       const spokenWords = normWords(combined).length;
       if (spokenWords >= 1) {
-        // Wait generously so mid-sentence breaths or dramatic pauses NEVER cut her off early!
-        // Only use 1.05s timer after she has clearly reached the end of the line & Chrome finalized speech.
+        // Snappy response once the ending of the line is spoken; patient 1.45s mid-line so breaths never cut you off!
         const waitMs = (pron.ok && pron.tailMatched && allFinal)
-          ? 1050
-          : (pron.tailMatched && pron.ratio >= 0.70 ? 1350 : 2200);
+          ? 350
+          : (pron.ok && pron.tailMatched ? 520
+            : (pron.tailMatched && pron.ratio >= 0.70 ? 700 : 1450));
         silenceTimer = setTimeout(() => {
           judgeHerAttempt(cur, combined, confidences, 0);
         }, waitMs);
@@ -1741,10 +1881,12 @@ async function ensurePersistentMic() {
 
     rec.onend = () => {
       recIsRunning = false;
-      // Keep the SAME persistent instance alive while rehearsing (never re-instantiating!)
-      if (state.isRunning && !state.micError) {
+      // On iOS Safari, ONLY restart recognition while actively waiting on her line (so iOS never mutes other characters!)
+      const shouldKeepRunning = state.isRunning && !state.micError && (!IS_IOS || micGateOpen);
+      if (shouldKeepRunning) {
         setTimeout(() => {
-          if (state.isRunning && !recIsRunning && persistentRec) {
+          const stillNeed = state.isRunning && !recIsRunning && persistentRec && (!IS_IOS || micGateOpen);
+          if (stillNeed) {
             try { persistentRec.start(); } catch (e) {}
           }
         }, 150);
@@ -1756,7 +1898,8 @@ async function ensurePersistentMic() {
     persistentRec = rec;
   }
 
-  if (!recIsRunning) {
+  // On iOS, only start SpeechRecognition when the mic gate is actually open for her line
+  if (!recIsRunning && (!IS_IOS || micGateOpen)) {
     try {
       persistentRec.start();
     } catch (e) {
@@ -1770,6 +1913,10 @@ function closeMicGate() {
   stopAcousticSampling();
   if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
   if (gateDelayTimer) { clearTimeout(gateDelayTimer); gateDelayTimer = null; }
+  // CRITICAL iOS Safari fix: stop SpeechRecognition when other characters speak so iOS restores full speaker audio!
+  if (IS_IOS && persistentRec && recIsRunning) {
+    try { persistentRec.stop(); } catch (e) {}
+  }
 }
 
 function openMicGateForMyLine() {
@@ -1781,7 +1928,7 @@ function openMicGateForMyLine() {
   state.coachFeedback = null;
   state.justMatched = false;
 
-  // Brief 300ms pause so residual speaker echo from the cue line finishes before listening
+  // Brief 150ms echo guard before listening
   gateDelayTimer = setTimeout(() => {
     if (!state.isRunning || !state.waitingForMe) return;
     micGateOpen = true;
@@ -1789,7 +1936,7 @@ function openMicGateForMyLine() {
     ensurePersistentMic();
     startAcousticSampling();
     updateLiveMicDom();
-  }, 300);
+  }, 150);
 }
 
 function completeHerTurn() {
@@ -1814,7 +1961,7 @@ function completeHerTurn() {
     } else {
       pauseRehearsal();
     }
-  }, 680);
+  }, 360);
 }
 
 // ============================================================================
@@ -1824,10 +1971,7 @@ function cancelAudioTimers() {
   runId++;
   closeMicGate();
   if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
-  if (activeAudioEl) {
-    try { activeAudioEl.pause(); activeAudioEl.src = ""; } catch (e) {}
-    activeAudioEl = null;
-  }
+  stopActivePlayback();
   if ("speechSynthesis" in window) {
     try {
       if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
@@ -1853,7 +1997,10 @@ function pauseRehearsal() {
 function startRehearsal() {
   state.isRunning = true;
   state.micError = "";
-  ensurePersistentMic(); // Request/activate persistent mic ONCE right on user click!
+  unlockAudioForMobile(); // Synchronously unlock iOS Safari AudioContext + <audio> on tap!
+  if (!IS_IOS) {
+    ensurePersistentMic(); // On Desktop/Android, activate persistent mic ONCE right on user click!
+  }
 
   const cur = state.script.items[state.currentIndex];
   // If starting on a song block and not already practicing it, offer to skip right away!
@@ -1961,7 +2108,7 @@ function runLoop() {
   };
 
   if (!spoken) {
-    advanceAfter(400);
+    advanceAfter(350);
     return;
   }
 
@@ -1972,11 +2119,6 @@ function runLoop() {
       advanceAfter(450);
       return;
     }
-    try {
-      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-        window.speechSynthesis.cancel();
-      }
-    } catch (e) {}
 
     const profile = resolveProfile(cur.speaker);
     const voice = pickHumanVoice(profile);
@@ -1986,48 +2128,75 @@ function runLoop() {
       if (myRun !== runId || !state.isRunning) return;
       if (chunkIdx >= chunks.length) {
         state.isSpeaking = false;
-        advanceAfter(260);
+        advanceAfter(220);
         return;
       }
 
-      const utter = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+      const chunkText = chunks[chunkIdx];
+      const utter = new SpeechSynthesisUtterance(chunkText);
       if (voice) utter.voice = voice;
       utter.lang = voice ? voice.lang : (profile.accent || "en-US");
       // Keep pitch strictly 1.0 to avoid vocoder buzz on fallback browser voices
       utter.pitch = 1.0;
       utter.rate = profile.rate || 0.98;
 
+      let settled = false;
+      const finishChunk = () => {
+        if (settled || myRun !== runId) return;
+        settled = true;
+        if (speechWatchdogTimer) { clearTimeout(speechWatchdogTimer); speechWatchdogTimer = null; }
+        if (chunkIdx + 1 < chunks.length) {
+          stepTimer = setTimeout(() => speakChunkAt(chunkIdx + 1), 80);
+        } else {
+          state.isSpeaking = false;
+          advanceAfter(220);
+        }
+      };
+
       utter.onstart = () => {
         if (myRun !== runId) return;
         state.isSpeaking = true;
         renderStage();
       };
-      utter.onend = () => {
-        if (myRun !== runId) return;
-        if (chunkIdx + 1 < chunks.length) {
-          stepTimer = setTimeout(() => speakChunkAt(chunkIdx + 1), 90);
-        } else {
-          state.isSpeaking = false;
-          advanceAfter(260);
-        }
-      };
+      utter.onend = finishChunk;
       utter.onerror = () => {
-        if (myRun !== runId) return;
+        if (settled || myRun !== runId) return;
+        settled = true;
+        if (speechWatchdogTimer) { clearTimeout(speechWatchdogTimer); speechWatchdogTimer = null; }
         state.isSpeaking = false;
-        advanceAfter(350);
+        advanceAfter(300);
       };
 
       try {
+        // On iOS Safari: NEVER call cancel() right before speak() (causes WebKit silent lockup!) — call resume() instead!
+        if (!IS_IOS && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+          window.speechSynthesis.cancel();
+        } else {
+          window.speechSynthesis.resume();
+        }
         state.isSpeaking = true;
         if (chunkIdx === 0) renderStage();
         window.speechSynthesis.speak(utter);
+
+        // Safety watchdog in case Safari drops onend on a long line
+        const maxWaitMs = Math.max(4500, Math.min(20000, chunkText.length * 110 + 3000));
+        speechWatchdogTimer = setTimeout(() => {
+          if (!settled && myRun === runId && state.isRunning) {
+            finishChunk();
+          }
+        }, maxWaitMs);
       } catch (e) {
         state.isSpeaking = false;
-        advanceAfter(400);
+        advanceAfter(350);
       }
     };
 
-    speakChunkAt(0);
+    // On iOS, give AVAudioSession a tiny 120ms beat after stopping SpeechRecognition before speaking
+    if (IS_IOS) {
+      stepTimer = setTimeout(() => speakChunkAt(0), 120);
+    } else {
+      speakChunkAt(0);
+    }
   };
 
   // Priority 1: Optional OpenAI API key if explicitly configured by user
@@ -2041,25 +2210,17 @@ function runLoop() {
         speakWithBrowserVoice();
         return;
       }
-      const audio = new Audio(url);
-      activeAudioEl = audio;
-      audio.onended = () => {
-        if (myRun !== runId) return;
-        activeAudioEl = null;
-        state.isSpeaking = false;
-        advanceAfter(240);
-      };
-      audio.onerror = () => {
-        if (myRun !== runId) return;
-        activeAudioEl = null;
-        speakWithBrowserVoice();
-      };
-      audio.play().catch(() => speakWithBrowserVoice());
+      playAudioUrlUnlocked(
+        url,
+        myRun,
+        () => { state.isSpeaking = false; advanceAfter(200); },
+        () => speakWithBrowserVoice()
+      );
     });
     return;
   }
 
-  // Priority 2: Free In-Browser Kokoro-82M Neural AI Voices (human-like, cached & prefetched!)
+  // Priority 2: Free In-Browser Kokoro-82M Neural AI Voices (plays via unlocked Web Audio on iOS/Android/Desktop!)
   if (state.kokoroStatus === "ready") {
     const chunks = splitSpeechChunks(spoken);
     const playKokoroChunk = (chunkIdx) => {
@@ -2067,11 +2228,10 @@ function runLoop() {
       if (chunkIdx >= chunks.length) {
         state.isSpeaking = false;
         state.isGeneratingVoice = false;
-        advanceAfter(220);
+        advanceAfter(180);
         return;
       }
 
-      // Check cache to avoid flashing "Preparing voice..." on instant cached playback
       const cfg = getKokoroConfig(cur.speaker);
       const cacheKey = `${cfg.voice}:${cfg.speed}:${chunks[chunkIdx]}`;
       if (!kokoroAudioCache.has(cacheKey)) {
@@ -2080,7 +2240,6 @@ function runLoop() {
         renderStage();
       }
 
-      // Queue remaining chunks of this line right away
       for (let k = chunkIdx + 1; k < chunks.length; k++) {
         requestKokoroChunkUrl(chunks[k], cur.speaker, false);
       }
@@ -2092,30 +2251,24 @@ function runLoop() {
           speakWithBrowserVoice();
           return;
         }
-        // While this chunk plays, warm up the next 2 script lines in the background!
         if (chunkIdx === chunks.length - 1) {
           prefetchUpcomingKokoroCues(state.currentIndex);
         }
-        const audio = new Audio(url);
-        activeAudioEl = audio;
         state.isSpeaking = true;
         renderStage();
-        audio.onended = () => {
-          if (myRun !== runId) return;
-          activeAudioEl = null;
-          if (chunkIdx + 1 < chunks.length) {
-            stepTimer = setTimeout(() => playKokoroChunk(chunkIdx + 1), 65);
-          } else {
-            state.isSpeaking = false;
-            advanceAfter(220);
-          }
-        };
-        audio.onerror = () => {
-          if (myRun !== runId) return;
-          activeAudioEl = null;
-          speakWithBrowserVoice();
-        };
-        audio.play().catch(() => speakWithBrowserVoice());
+        playAudioUrlUnlocked(
+          url,
+          myRun,
+          () => {
+            if (chunkIdx + 1 < chunks.length) {
+              stepTimer = setTimeout(() => playKokoroChunk(chunkIdx + 1), 55);
+            } else {
+              state.isSpeaking = false;
+              advanceAfter(180);
+            }
+          },
+          () => speakWithBrowserVoice()
+        );
       });
     };
 
@@ -2183,7 +2336,7 @@ function stepBack() {
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      selectedCastId: state.selectedCastId,
+      selectedCastIds: state.selectedCastIds,
       currentIndex: state.currentIndex,
       hideMyLines: state.hideMyLines
     }));
@@ -2195,7 +2348,12 @@ function loadSavedState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const p = JSON.parse(raw);
-      if (MAIN_CAST_IDS.includes(p.selectedCastId)) state.selectedCastId = p.selectedCastId;
+      if (Array.isArray(p.selectedCastIds)) {
+        const valid = p.selectedCastIds.filter(id => MAIN_CAST_IDS.includes(id));
+        if (valid.length) state.selectedCastIds = valid;
+      } else if (MAIN_CAST_IDS.includes(p.selectedCastId)) {
+        state.selectedCastIds = [p.selectedCastId];
+      }
       if (typeof p.currentIndex === "number" && p.currentIndex >= 0 && p.currentIndex < state.script.items.length) {
         state.currentIndex = p.currentIndex;
       }
@@ -2258,15 +2416,22 @@ function renderAll() {
 function renderControls() {
   const row = document.getElementById("characterRow");
   row.innerHTML = MAIN_CAST_IDS.map(cid => {
-    const active = cid === state.selectedCastId;
+    const active = state.selectedCastIds.includes(cid);
     return `
-      <button data-char="${cid}" class="btn-tap px-3 py-2 rounded-xl text-xs font-semibold border text-center ${
+      <button data-char="${cid}" aria-pressed="${active}" class="btn-tap px-2.5 py-2 rounded-xl text-xs font-semibold border text-center ${
         active
           ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]"
           : "bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:border-[var(--primary)]"
-      }">${escapeHtml(SHORT_ROLE_LABELS[cid])}</button>
+      }">${active ? "✓ " : ""}${escapeHtml(SHORT_ROLE_LABELS[cid])}</button>
     `;
   }).join("");
+
+  const sumEl = document.getElementById("selectedRolesSummary");
+  if (sumEl) {
+    sumEl.textContent = state.selectedCastIds.length > 1
+      ? `${state.selectedCastIds.length} selected: ${formatSelectedRolesLabel()}`
+      : formatSelectedRolesLabel();
+  }
 
   const cur = state.script.items[state.currentIndex];
   const curScene = state.script.scenes.find(s => s.id === cur.sceneId) || state.script.scenes[0];
@@ -2346,6 +2511,8 @@ function renderStage() {
     const nextLabel = nextAfter !== null
       ? `Next dialogue: ${items[nextAfter].speaker}`
       : "End of script";
+    const roleLbl = formatSelectedRolesLabel();
+    const plural = state.selectedCastIds.length > 1;
 
     card.innerHTML = `
       <div class="rounded-2xl p-6 bg-[var(--card)] border-2 border-[var(--primary)]/50 space-y-4">
@@ -2357,7 +2524,7 @@ function renderStage() {
             </div>
             <h2 class="text-xl font-bold tracking-tight">${escapeHtml(blk.title)}</h2>
             <p class="text-xs text-[var(--muted-foreground)]">
-              ${myLinesInSong > 0 ? `${SHORT_ROLE_LABELS[state.selectedCastId]} has ${myLinesInSong} sung ${myLinesInSong === 1 ? "part" : "parts"} here` : `${SHORT_ROLE_LABELS[state.selectedCastId]} does not sing in this song`} · ${escapeHtml(nextLabel)}
+              ${myLinesInSong > 0 ? `${escapeHtml(roleLbl)} ${plural ? "have" : "has"} ${myLinesInSong} sung ${myLinesInSong === 1 ? "part" : "parts"} here` : `${escapeHtml(roleLbl)} ${plural ? "do" : "does"} not sing in this song`} · ${escapeHtml(nextLabel)}
             </p>
           </div>
         </div>
@@ -2391,7 +2558,7 @@ function renderStage() {
     if (state.justMatched) {
       statusHtml = `
         <div class="px-3.5 py-2.5 rounded-xl bg-[var(--background)] border border-[var(--success)] text-xs font-semibold text-[var(--success)] flex items-center justify-between gap-2">
-          <span>✓ Great delivery! Clear, projected &amp; expressive — moving on…</span>
+          <span>✓ Great delivery! Moving on…</span>
         </div>
       `;
     } else if (state.isRunning && state.micError) {
@@ -2407,18 +2574,19 @@ function renderStage() {
       const projState = fb ? (fb.projectionOk ? "pass" : "warn") : "idle";
       const exprState = fb ? (fb.expressionOk ? "pass" : "warn") : "idle";
       const pct = Math.min(100, Math.max(0, state.liveProjectionPct || 0));
+      const showAcoustic = !IS_IOS;
 
       statusHtml = `
         <div class="px-3.5 py-3 rounded-xl bg-[var(--background)] border ${isRetry ? "border-[var(--warning)] coach-nudge" : "border-[var(--primary)]/40"} space-y-2 text-xs">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="inline-flex items-center gap-2 font-semibold ${isRetry ? "text-[var(--foreground)]" : "text-[var(--primary)]"}">
               <span class="wave-bars"><span></span><span></span><span></span></span>
-              ${isRetry ? "Try that line again!" : "Listening for delivery…"}
+              ${isRetry ? "Try that line again!" : "Listening for your line…"}
             </span>
             <div class="flex flex-wrap items-center gap-1.5">
               ${renderCoachPill("Pronunciation", pronState)}
-              ${renderCoachPill("Projection", projState)}
-              ${renderCoachPill("Expression", exprState)}
+              ${showAcoustic ? renderCoachPill("Projection", projState) : ""}
+              ${showAcoustic ? renderCoachPill("Expression", exprState) : ""}
             </div>
           </div>
           ${isRetry ? `
@@ -2426,16 +2594,18 @@ function renderStage() {
               ${escapeHtml(fb.tip)}
             </div>
           ` : ""}
-          <div class="space-y-1">
-            <div class="flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
-              <span>Stage Projection</span>
-              <span>Aim past the mark →</span>
+          ${showAcoustic ? `
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
+                <span>Stage Projection</span>
+                <span>Aim past the mark →</span>
+              </div>
+              <div class="relative h-2 w-full rounded-full bg-[var(--card)] overflow-hidden">
+                <div id="projBarFill" class="h-full transition-all duration-75 rounded-full" style="width: ${pct}%; background: ${pct >= 60 ? "var(--success)" : "var(--primary)"};"></div>
+                <div class="absolute top-0 bottom-0 w-0.5 bg-[var(--foreground)]/50" style="left: 60%;" title="Stage projection target"></div>
+              </div>
             </div>
-            <div class="relative h-2 w-full rounded-full bg-[var(--card)] overflow-hidden">
-              <div id="projBarFill" class="h-full transition-all duration-75 rounded-full" style="width: ${pct}%; background: ${pct >= 60 ? "var(--success)" : "var(--primary)"};"></div>
-              <div class="absolute top-0 bottom-0 w-0.5 bg-[var(--foreground)]/50" style="left: 60%;" title="Stage projection target"></div>
-            </div>
-          </div>
+          ` : ""}
           <div id="micHeardLine" class="text-[var(--muted-foreground)] truncate">${
             state.heardTranscript
               ? `Heard: "${escapeHtml(state.heardTranscript)}"`
@@ -2505,16 +2675,35 @@ function wireEvents() {
     const btn = e.target.closest("[data-char]");
     if (!btn) return;
     pauseRehearsal();
-    state.selectedCastId = Number(btn.dataset.char);
-    state.practicingSongBlockId = null;
-    // Start right before this character's first line in the play
-    const firstIdx = state.script.items.findIndex(it => isMyLine(it));
-    if (firstIdx > 0) {
-      const prevLineIdx = findNextPlayable(firstIdx, -1);
-      state.currentIndex = (prevLineIdx !== null && state.script.items[prevLineIdx].sceneId === state.script.items[firstIdx].sceneId)
-        ? prevLineIdx : firstIdx;
+    const cid = Number(btn.dataset.char);
+    if (state.selectedCastIds.includes(cid)) {
+      // Keep at least 1 character selected at all times
+      if (state.selectedCastIds.length > 1) {
+        state.selectedCastIds = state.selectedCastIds.filter(id => id !== cid);
+      }
     } else {
-      state.currentIndex = findNextPlayable(-1, 1) || 0;
+      state.selectedCastIds = MAIN_CAST_IDS.filter(id => id === cid || state.selectedCastIds.includes(id));
+    }
+    state.practicingSongBlockId = null;
+
+    // If current scene has no remaining lines for the selected roles, jump right before their first line
+    const cur = state.script.items[state.currentIndex];
+    const curScene = cur && state.script.scenes.find(s => s.id === cur.sceneId);
+    let hasUpcomingInScene = false;
+    if (curScene) {
+      for (let i = state.currentIndex; i <= curScene.endIndex; i++) {
+        if (isMyLine(state.script.items[i])) { hasUpcomingInScene = true; break; }
+      }
+    }
+    if (!hasUpcomingInScene) {
+      const firstIdx = state.script.items.findIndex(it => isMyLine(it));
+      if (firstIdx > 0) {
+        const prevLineIdx = findNextPlayable(firstIdx, -1);
+        state.currentIndex = (prevLineIdx !== null && state.script.items[prevLineIdx].sceneId === state.script.items[firstIdx].sceneId)
+          ? prevLineIdx : firstIdx;
+      } else {
+        state.currentIndex = findNextPlayable(-1, 1) || 0;
+      }
     }
     saveState();
     renderAll();
